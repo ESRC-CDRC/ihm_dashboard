@@ -1,6 +1,8 @@
 # Dashboard app based on R Shiny to visualise various transport data generated
 # as part of the Inclusive and Healthy Mobility project at UCL
 
+# Developed by Alistair Leak https://www.linkedin.com/in/alistairleak/ as part
+# of the Inclusive and Healthy Mobility project at UCL.
 
 ## app.R ##
 library(shinydashboard) # Dashboard.
@@ -16,7 +18,7 @@ library(shinyWidgets) # Helper functions for shiny
 library(htmltools) # Helper functions for Shiny
 library(rbokeh) # Access to Bokeh plotting in R
 library(maptools) # read and write shapefiles
-library(shinyjs) # Addittional java script functionality
+library(shinyjs) # Additional java script functionality
 library(forcats) # Helper functions for working with factors
 library(rintrojs) # Javascript based introduction to app
 
@@ -32,9 +34,10 @@ ui <- function(request) {
         # be found using the origin destination
         menuItem("Who Travels", tabName = "tab_dygraphs", icon = icon("dashboard")),
         # Here we will have our tool for
-        menuItem("Where and When", tabName = "tab_od_c", icon = icon("map")),
+        #menuItem("Where and When (TfWM 123)", tabName = "tab_od_c", icon = icon("map")),
+        menuItem("Where and When", tabName = "tab_od_c_real", icon = icon("map")),
         menuItem("Access to Services", tabName = "tab_access", icon = icon("dashboard")),
-        menuItem("Who's Eligible", tabName = "tab_elig", icon = icon("user")),
+        menuItem("Who is Eligible", tabName = "tab_elig", icon = icon("user")),
         # Here we will have instructions, credits etc
         menuItem("About", tabName = "tab_about", icon = icon("info")),
         bookmarkButton(
@@ -53,19 +56,27 @@ ui <- function(request) {
       tabItems(
         tabItem(
           tabName = "tab_dygraphs",
-          fluidRow(
-            infoBox("Total Journeys", textOutput("n_journeys", inline = TRUE), icon = icon("signal"))
-          ),
+          tags$h4("Explore who travels over time (ENCTS Concession).", style = "display: block; font-size: 1.5em; margin-top: 0.1em; margin-bottom: 0.1em;"),
           fluidRow(
             box(
               absolutePanel(
                 top = 35, left = 20, style = "z-index: 1000;",
                 dropdownButton(
                   circle = TRUE, status = "danger", icon = icon("gear"), width = "200px",
-
+                  selectInput(
+                    inputId = "dygraph_statistic", label = "Statistic",
+                    choices = list("Passengers" = "pp", "Journeys" = "n", "Journeys per person" = "npp")
+                  ),
+                  selectInput(
+                    inputId = "dygraph_type", label = "Passenger Type",
+                    choices = list(
+                      "Over 60 Concession" = "Over 60 Concession",
+                      "Disabled Concession" = "Disabled Concession"
+                    )
+                  ),
                   selectInput(
                     inputId = "dygraph_time_resolution", label = "Resolution",
-                    choices = list("1 Day" = "day", "1 week" = "week", "1 Month" = "month", "Quarter" = "quarter")
+                    choices = list("1 Month" = "month", "Quarter" = "quarter")
                   ),
                   tooltip = tooltipOptions(title = "Click to see inputs !")
                 )
@@ -76,41 +87,29 @@ ui <- function(request) {
             )
           )
         ),
-        # First tab content
-        tabItem(tabName = "dashboard"),
-        # Second Comparative Map tab content
         tabItem(
-          tabName = "tab_od_c",
+          tabName = "tab_od_c_real",
+          tags$h4("Query regional passenger flows.", style = "display: block; font-size: 1.5em; margin-top: 0.1em; margin-bottom: 0.1em;"),
           # Top menu bar has all control elements
           fluidRow(
             box(
-              width = 3, title = "When?", id = "od_box_1", status = "primary",
-              solidHeader = T, style = "min-height: 255px;",
+              width = 3, title = "When?", id = "od_box_1_real", status = "primary",
+              solidHeader = T, style = "min-height: 270px;",
               column(
                 12,
-                airDatepickerInput("od_c_date_start_1",
-                  label = "Period 1: Start date and time",
-                  value = "2015-10-01"
-                ),
-                shinyjs::hidden(airDatepickerInput("od_c_date_start_custom",
-                  label = "Period 1: Custom Period",
-                  value = "2015-10-01",
-                  range = TRUE
-                ))
-              ),
-              column(
-                12,
-                sliderInput("od_c_time_1",
-                  label = NULL,
-                  min = 0, max = 24, post = ":00", value = c(0, 24)
+                airMonthpickerInput("od_c_real_date_start_1",
+                                    label = "Start month",
+                                    value = "2015-10-01",
+                                    maxDate = "2016-08-01",
+                                    minDate = "2014-01-01"
                 )
               ),
               column(
                 12,
                 pickerInput(
-                  inputId = "od_c_period",
+                  inputId = "od_c_real_period",
                   label = "Period",
-                  choices = list("1 Day" = 1, "1 Week" = 6, "4 weeks" = 27, "Custom" = "custom"),
+                  choices = list("1 Month" = 1, "2 Months" = 2, "3 months" = 3),
                   selected = 6,
                   options = list(
                     `actions-box` = T,
@@ -121,12 +120,12 @@ ui <- function(request) {
               )
             ),
             box(
-              width = 3, title = "Who?", id = "od_box_2", status = "primary",
-              solidHeader = T, style = "min-height: 255px;",
+              width = 3, title = "Who?", id = "od_box_2_real", status = "primary",
+              solidHeader = T, style = "min-height: 270px;",
               column(
                 12,
-                pickerInput(
-                  inputId = "od_c_demographics",
+                shinyjs::disabled(pickerInput(
+                  inputId = "od_c_real_demographics",
                   label = "Demographics",
                   choices = list(
                     "Age" = list(
@@ -148,18 +147,18 @@ ui <- function(request) {
                     `selected-text-format` = "count > 3"
                   ),
                   multiple = T
-                )
+                ))
               ),
               br(),
               column(
                 12,
-                pickerInput(
-                  inputId = "od_c_type_1",
-                  label = "Card Type",
+                shinyjs::disabled(pickerInput(
+                  inputId = "od_c_real_type_1",
+                  label = "Card type",
                   choices = list(
                     "Concessionary" = "con",
                     "Non-Concessionary" = "non",
-                    "Dissability" = "dis"
+                    "Disability" = "dis"
                   ),
                   selected = c("con", "non", "dis"),
                   options = list(
@@ -167,17 +166,24 @@ ui <- function(request) {
                     size = 10
                   ),
                   multiple = T
-                )
+                ))
+              ),
+              column(
+                12,
+                shinyjs::disabled(sliderInput("od_c_real_time_1",
+                                              label = "Time of Day",
+                                              min = 0, max = 24, post = ":00", value = c(0, 24)
+                ))
               )
             ),
             box(
-              width = 3, title = "Comparison", id = "od_box_3", status = "primary",
-              solidHeader = T, style = "min-height: 255px;",
+              width = 3, title = "Comparison", id = "od_box_3_real", status = "primary",
+              solidHeader = T, style = "min-height: 270px;",
               column(
                 12,
                 radioGroupButtons(
-                  label = "Compare?",
-                  inputId = "od_c_version",
+                  label = "Compare flows to another time period?",
+                  inputId = "od_c_real_version",
                   choices = list("Yes" = "comp", "No" = "static"),
                   selected = "static",
                   justified = T,
@@ -193,21 +199,22 @@ ui <- function(request) {
               br(),
               column(
                 12,
-                airDatepickerInput("od_c_date_start_2",
-                  label = "Period 2: Date",
-                  value = "2015-10-04"
-                ),
-                h4("Comparison period and time of day are equal to period 1.")
+                airMonthpickerInput("od_c_real_date_start_2",
+                                    label = "Start month of 2nd period",
+                                    value = "2015-12-01",
+                                    maxDate = "2016-08-01",
+                                    minDate = "2014-01-01"
+                )
               )
             ),
             box(
-              width = 3, title = "Plot", id = "od_box_4", status = "primary",
-              solidHeader = T, style = "min-height: 255px;",
+              width = 3, title = "Plot", id = "od_box_4_real", status = "primary",
+              solidHeader = T, style = "min-height: 270px;",
               column(
                 12,
-                pickerInput(
-                  inputId = "od_c_scale",
-                  label = "Scale ",
+                shinyjs::disabled(pickerInput(
+                  inputId = "od_c_real_scale",
+                  label = "Spatial scale ",
                   width = "100%",
                   choices = list(
                     "OA" = "oa",
@@ -220,13 +227,13 @@ ui <- function(request) {
                     size = 10
                   ),
                   multiple = F
-                )
+                ))
               ),
               column(
                 12,
                 pickerInput(
-                  inputId = "od_c_nrows",
-                  label = "Top~n. ",
+                  inputId = "od_c_real_nrows",
+                  label = "Maximum number of flows",
                   width = "100%",
                   choices = list(
                     "100" = 100, "1,000" = 1000, "5,000" = 5000,
@@ -239,11 +246,14 @@ ui <- function(request) {
                   ),
                   multiple = F
                 )
-              ), br(),
+              ),
               column(
                 12,
-                actionButton("od_help", "Help", width = "100%"),
-                actionButton("od_c_s_update", "Update", width = "100%", status = "primary")
+                actionButton("od_help_real", "Help", width = "100%"),
+                actionButton("od_c_real_s_update", "Update",
+                             width = "100%",
+                             style = "color: #fff; background-color: 	#d9534f; border-color: #B40404"
+                )
               )
             )
           ),
@@ -256,41 +266,41 @@ ui <- function(request) {
                 absolutePanel(
                   top = "65px", left = "80px", style = "z-index: 1000;",
                   selectInput(
-                    inputId = "od_c_zoom_to", label = NULL, width = "150px",
+                    inputId = "od_c_real_zoom_to", label = NULL, width = "150px",
                     choices = list(
-                      "West Midlands" = 0, "Birmingham" = 1, "Dudley" = 2,
+                      "West Midlands CA" = 0, "Birmingham" = 1, "Dudley" = 2,
                       "Coventry" = 3, "Sandwell" = 4, "Solihull" = 5,
                       "Walsall" = 6, "Wolverhampton" = 7
                     ),
-                    selected = 1
+                    selected = 0
                   )
                 ),
                 absolutePanel(
-                  top = "65px", id = "od_map_id", width = 300, right = "40px", style = "z-index: 999; font-size = 5px",
+                  top = "65px", id = "od_map_id_real", width = 300, right = "40px", style = "z-index: 999; font-size = 5px",
                   box(
-                    title = "Select a Marker to View Trends", id = "od_map_toggle",
+                    title = "Click on the map to view details", id = "od_map_real_toggle",
                     width = 320, style = "background: transparent; font-size: 8px;", status = "primary", solidHeader = T,
-                    addSpinner(rbokehOutput("inbound_bokeh_plot", height = 250, width = 290), spin = "circle", color = "#E41A1C"),
-                    addSpinner(rbokehOutput("outbound_bokeh_plot", height = 250, width = 290), spin = "circle", color = "#E41A1C")
+                    addSpinner(rbokehOutput("inbound_bokeh_plot_real", height = 250, width = 290), spin = "circle", color = "#E41A1C"),
+                    addSpinner(rbokehOutput("outbound_bokeh_plot_real", height = 250, width = 290), spin = "circle", color = "#E41A1C")
                     , collapsible = T, collapsed = T
                   )
                 ),
-                addSpinner(leafletOutput("map_com", height = 600), spin = "circle", color = "#E41A1C")
+                addSpinner(leafletOutput("map_com_real", height = 600), spin = "circle", color = "#E41A1C")
               ),
               tabPanel(
                 "Data",
-                dataTableOutput("od_c_tbl"),
-                downloadButton("od_c_downloader", "Download Data")
+                dataTableOutput("od_c_real_tbl"),
+                downloadButton("od_c_real_downloader", "Download Data")
               )
             )
           )
         ),
         tabItem(
           tabName = "tab_access",
-          # h3("Accessibility Explorer"),
+          tags$h4("Measure local access to services.", style = "display: block; font-size: 1.5em; margin-top: 0.1em; margin-bottom: 0.1em;"),
           tags$style(type = "text/css", "#ac_map {height: calc(70vh - 80px) !important}
-                                         #map_elig {height: calc(70vh - 80px) !important}; 
-                                         #test {position: absolute}"),
+                     #map_elig {height: calc(70vh - 80px) !important}; 
+                     #test {position: absolute}"),
           fluidRow(
             box(
               width = 3, title = "What?", id = "ac_box_1", status = "primary", solidHeader = T, height = "140px",
@@ -298,7 +308,7 @@ ui <- function(request) {
                 12,
                 pickerInput(
                   inputId = "ac_type",
-                  label = "Amenity Type ",
+                  label = "Select service",
                   width = "100%",
                   choices = list(
                     "Clinic" = "Clinic",
@@ -323,7 +333,7 @@ ui <- function(request) {
             box(
               width = 3, title = "Comparison", id = "ac_box_2", status = "primary", solidHeader = T, height = "140px",
               radioGroupButtons(
-                label = "Compare?",
+                label = "Compare accessibility to another time period?",
                 inputId = "ac_c_version",
                 choices = list("Yes" = "comp", "No" = "static"),
                 selected = "static",
@@ -337,7 +347,7 @@ ui <- function(request) {
               width = 4, title = "When?", id = "ac_box_3", status = "primary", solidHeader = T, height = "140px",
               shinyjs::hidden(sliderTextInput(
                 inputId = "ac_date",
-                label = "Date",
+                label = "Date(s)",
                 grid = T,
                 force_edges = T,
                 choices = c(
@@ -348,7 +358,7 @@ ui <- function(request) {
               )),
               sliderTextInput(
                 inputId = "ac_date_comp",
-                label = "Date",
+                label = "Date(s)",
                 grid = T,
                 force_edges = T,
                 choices = c(
@@ -359,9 +369,12 @@ ui <- function(request) {
               )
             ),
             box(
-              width = 2, title = "Plotting", id = "ac_box_4", status = "primary", solidHeader = T, height = "140px",
+              width = 2, title = "Plot", id = "ac_box_4", status = "primary", solidHeader = T, height = "140px",
               actionButton("access_help", "Help", align = "center", width = "100%"),
-              actionButton("ac_c_s_update", "Update", align = "center", width = "100%")
+              actionButton("ac_c_s_update", "Update",
+                           align = "center", width = "100%",
+                           style = "color: #fff; background-color: 	#d9534f; border-color: #B40404"
+              )
             )
           ),
           fluidRow(
@@ -374,22 +387,22 @@ ui <- function(request) {
                   selectInput(
                     inputId = "ac_zoom_to", label = NULL, width = "150px",
                     choices = list(
-                      "West Midlands" = 0, "Birmingham" = 1,
-                      "Dudley" = 2, "Coventry" = 3, "Sandwell" = 4,
-                      "Solihull" = 5, "Walsall" = 6, "Wolverhampton" = 7
+                      "West Midlands CA" = 0, "Birmingham" = 1, "Dudley" = 2,
+                      "Coventry" = 3, "Sandwell" = 4, "Solihull" = 5,
+                      "Walsall" = 6, "Wolverhampton" = 7
                     ),
-                    selected = 1
+                    selected = 0
                   )
                 ),
                 addSpinner(leafletOutput("ac_map"), spin = "circle", color = "#E41A1C"),
                 absolutePanel(
                   top = "65px", width = 300, right = "40px", style = "z-index: 999; font-size = 5px", id = "ac_map_id",
                   box(
-                    title = "Select an Area to View Trends", id = "ac_map_toggle",
+                    title = "Click on the map to view details", id = "ac_map_toggle",
                     width = 320, style = "background: transparent; font-size: 8px;", status = "primary", solidHeader = T,
                     addSpinner(rbokehOutput("access_bokeh_plot", height = 250, width = 290),
-                      spin = "circle",
-                      color = "#E41A1C"
+                               spin = "circle",
+                               color = "#E41A1C"
                     ), collapsible = T, collapsed = T
                   )
                 )
@@ -401,129 +414,167 @@ ui <- function(request) {
               )
             )
           )
-        ), tabItem(
-          tabName = "tab_elig",
-          fluidRow(
-            box(
-              width = 3, title = "Source", id = "elig_box_0", solidHeader = T, status = "primary", height = 140,
-              radioGroupButtons(
-                inputId = "elig_source",
-                label = "Source?",
-                choices = list("Estimates" = "estimate", "Forecasts" = "forecast"),
-                selected = "estimate",
-                width = "100%",
-                individual = T,
-                justified = T, status = "primary",
-                checkIcon = list(yes = icon("ok", lib = "glyphicon"), no = icon("remove", lib = "glyphicon"))
-              )
-            ),
-            box(
-              width = 3, title = "Comparison", id = "elig_box_1", solidHeader = T, status = "primary", height = 140,
-              radioGroupButtons(
-                inputId = "elig_version",
-                label = "Compare?",
-                choices = list("Yes" = "comp", "No" = "static"),
-                selected = "static",
-                width = "100%",
-                individual = T,
-                justified = T, status = "primary",
-                checkIcon = list(yes = icon("ok", lib = "glyphicon"), no = icon("remove", lib = "glyphicon"))
-              )
-            ),
-            box(
-              width = 4, title = "When?", id = "elig_box_2", solidHeader = T, status = "primary", height = 140,
-              shinyjs::hidden(sliderTextInput(
-                inputId = "elig_year",
-                label = "Date",
-                grid = T,
-                force_edges = T,
-                choices = c(2008:2016), selected = c(2013)
-              )),
-              sliderTextInput(
-                inputId = "elig_year_comp",
-                label = "Date",
-                grid = T,
-                force_edges = T,
-                choices = c(2008:2016), selected = c(2010:2013)
-              ),
-              shinyjs::hidden(sliderTextInput(
-                inputId = "elig_forecast_year",
-                label = "Date",
-                grid = T,
-                force_edges = T,
-                choices = c(2016:2041), selected = c(2016)
-              )),
-              shinyjs::hidden(sliderTextInput(
-                inputId = "elig_year_comp_forecast",
-                label = "Date",
-                grid = T,
-                force_edges = T,
-                choices = c(2016:2041), selected = c(2016, 2020)
-              ))
-            ),
-            box(
-              width = 2, title = "Plotting", id = "elig_box_3", solidHeader = T, status = "primary", height = 140,
-              actionButton("elig_help", "Help", width = "100%"),
-              actionButton("elig_update", "Update", width = "100%")
-            )
-          ),
-          fluidRow(
-            tabBox(
-              width = 12,
-              tabPanel(
-                title = "Map", width = 12,
-                absolutePanel(
-                  top = "65px", left = "80px", style = "z-index: 1000;",
-                  selectInput(
-                    inputId = "elig_zoom_to", label = NULL, width = "150px",
-                    choices = list(
-                      "West Midlands" = 0, "Birmingham" = 1, "Dudley" = 2,
-                      "Coventry" = 3, "Sandwell" = 4, "Solihull" = 5,
-                      "Walsall" = 6, "Wolverhampton" = 7
-                    ),
-                    selected = 1
-                  )
-                ),
-                addSpinner(leafletOutput("map_elig"), spin = "circle", color = "#E41A1C"),
-                absolutePanel(
-                  top = "65px", width = 300, right = "40px", style = "z-index: 999; font-size = 5px", id = "elig_map_id",
-                  box(
-                    title = "Select an Area to View Trends", id = "map_elig_toggle", width = 320,
-                    style = "background: transparent; font-size: 8px;", status = "primary", solidHeader = T,
-                    addSpinner(rbokehOutput("c_bokeh_plot", height = 250, width = 290), spin = "circle", color = "#E41A1C"),
-                    collapsible = T, collapsed = T
-                  )
+          ), tabItem(
+            tabName = "tab_elig",
+            tags$h4("View local eligibility to concessionary travel.", style = "display: block; font-size: 1.5em; margin-top: 0.1em; margin-bottom: 0.1em;"),
+            fluidRow(
+              box(
+                width = 3, title = "What?", id = "elig_box_0", solidHeader = T, status = "primary", height = 140,
+                radioGroupButtons(
+                  inputId = "elig_source",
+                  label = "What eligibility?",
+                  choices = list("Historical" = "estimate", "Forecasts" = "forecast"),
+                  selected = "estimate",
+                  width = "100%",
+                  individual = T,
+                  justified = T, status = "primary",
+                  checkIcon = list(yes = icon("ok", lib = "glyphicon"), no = icon("remove", lib = "glyphicon"))
                 )
               ),
-              tabPanel(
-                title = "Data", width = 12,
-                dataTableOutput("elig_s_tbl"),
-                downloadButton("elig_downloader", "Download Data")
+              box(
+                width = 3, title = "Comparison", id = "elig_box_1", solidHeader = T, status = "primary", height = 140,
+                radioGroupButtons(
+                  inputId = "elig_version",
+                  label = "Compare eligibility to another time period?",
+                  choices = list("Yes" = "comp", "No" = "static"),
+                  selected = "static",
+                  width = "100%",
+                  individual = T,
+                  justified = T, status = "primary",
+                  checkIcon = list(yes = icon("ok", lib = "glyphicon"), no = icon("remove", lib = "glyphicon"))
+                )
+              ),
+              box(
+                width = 4, title = "When?", id = "elig_box_2", solidHeader = T, status = "primary", height = 140,
+                shinyjs::hidden(sliderTextInput(
+                  inputId = "elig_year",
+                  label = "Date(s)",
+                  grid = T,
+                  force_edges = T,
+                  choices = c(2008:2016), selected = c(2013)
+                )),
+                sliderTextInput(
+                  inputId = "elig_year_comp",
+                  label = "Date(s)",
+                  grid = T,
+                  force_edges = T,
+                  choices = c(2008:2016), selected = c(2010:2013)
+                ),
+                shinyjs::hidden(sliderTextInput(
+                  inputId = "elig_forecast_year",
+                  label = "Date(s)",
+                  grid = T,
+                  force_edges = T,
+                  choices = c(2016:2041), selected = c(2016)
+                )),
+                shinyjs::hidden(sliderTextInput(
+                  inputId = "elig_year_comp_forecast",
+                  label = "Date(s)",
+                  grid = T,
+                  force_edges = T,
+                  choices = c(2016:2041), selected = c(2016, 2020)
+                ))
+              ),
+              box(
+                width = 2, title = "Plot", id = "elig_box_3", solidHeader = T, status = "primary", height = 140,
+                actionButton("elig_help", "Help", width = "100%"),
+                actionButton("elig_update", "Update",
+                             width = "100%",
+                             style = "color: #fff; background-color: 	#d9534f; border-color: #B40404"
+                )
+              )
+            ),
+            fluidRow(
+              tabBox(
+                width = 12,
+                tabPanel(
+                  title = "Map", width = 12,
+                  absolutePanel(
+                    top = "65px", left = "80px", style = "z-index: 1000;",
+                    selectInput(
+                      inputId = "elig_zoom_to", label = NULL, width = "150px",
+                      choices = list(
+                        "West Midlands CA" = 0, "Birmingham" = 1, "Dudley" = 2,
+                        "Coventry" = 3, "Sandwell" = 4, "Solihull" = 5,
+                        "Walsall" = 6, "Wolverhampton" = 7
+                      ),
+                      selected = 0
+                    )
+                  ),
+                  addSpinner(leafletOutput("map_elig"), spin = "circle", color = "#E41A1C"),
+                  absolutePanel(
+                    top = "65px", width = 300, right = "40px", style = "z-index: 999; font-size = 5px", id = "elig_map_id",
+                    box(
+                      title = "Click on the map to view details", id = "map_elig_toggle", width = 320,
+                      style = "background: transparent; font-size: 8px;", status = "primary", solidHeader = T,
+                      addSpinner(rbokehOutput("c_bokeh_plot", height = 250, width = 290), spin = "circle", color = "#E41A1C"),
+                      collapsible = T, collapsed = T
+                    )
+                  )
+                ),
+                tabPanel(
+                  title = "Data", width = 12,
+                  dataTableOutput("elig_s_tbl"),
+                  downloadButton("elig_downloader", "Download Data")
+                )
               )
             )
-          )
-        ),
+          ),
         # Third tab content: Details about how to use tool and credits
         tabItem(
           tabName = "tab_about",
-          h2("Inclusive and Healthy Mobility: Understanding Trends in Concessionary Travel in the West Midlands"),
-          h3("In this project, we intend to generate new insights into the changing mobility practices of senior residents."),
-          p("In this project, we intend to generate new insights into the changing mobility practices of senior residents. The project is funded by the ESRC's Big Data Network Phase 3 and conducted in partnership with Transport for West Midlands (Co-I Chris Lane) and the UCL Consumer Data Research Centre (Co-I Prof Paul Longley)."),
-          h2("Changing practices, changing transport"),
-          p("There is an ongoing need to study the mobility practices of senior residents as lifestyle practices, age and ethnic characteristics in this group steadily diversify. At the same time, the transport system continues being transformed by new mobile technologies, the emergence of novel, demand-responsive and shared transport services as well as a dynamic information and communication environment propagating online services, shopping, entertainment and socialising, all of which affect the times and ways we travel."),
-          h2("Decline in bus patronage"),
-
-          p("Viewed against these developments, the project investigates the changing bus patronage of senior residents in the region of West Midlands (West Midlands Combined Authority - WMCA). Since 2009, the region has experienced a dramatic decline of approximately 25 per cent in bus patronage.* Understanding these trends is an urgent priority for urban transport authorities, not only for economic and operational reasons. Unmet mobility needs can also reinforce health disadvantage and social inequalities among potentially vulnerable groups, such as elderly residents."),
-          h2("New forms of urban data"),
-          p("WMCA's travel smartcards have produced a database of several hundred million records of bus boardings over nearly seven years. The data constitutes a powerful resource for research, particularly when it is linked to other datasets routinely collected by transport operators in England. Using data linkage procedures, we are developing a complex data processing framework that will permit contextual analysis of changing bus patronage with respect to regularity of daily travel, origins and destinations, travel distance and time and ??? by inference ??? delay experience, trip chaining, trip purpose and the time spent away from home using public transport."),
-          h2("Inclusive urban transport systems"),
-          p("Apart from contributions to transport and health geography, we expect the research to generate benefits for the UK urban transport sector through updated insights into senior residents' travel needs, the demonstration of transferable data processing solutions, impact assessments of network and service changes as well as an appraisal of strategic policy instruments, such as 'Mobility as a Service' and the English National Concessionary Travel Scheme. As part of a wider vision, the project will add to the debate on inclusive and health-promoting transport systems as a key enabler of independent living in later life stages. ")
+          p("This dashboard was developed as part of the research project 'Inclusive and Healthy Mobility: Understanding Trends in Concessionary Travel in the West Midlands', conducted at University College London in partnership with Transport for West Midlands. Click here to find more information about the project."),
+          p("The dashboard was created using", tags$a(href = "https://shiny.rstudio.com/", "R Studio Shiny", target="_blank"), "by ", tags$a(href = "https://www.linkedin.com/in/alistairleak/", "Alistair Leak.", target="_blank")),
+          p("Research team: ", tags$a(href = "https://www.ucl.ac.uk/bartlett/casa/jens-kandt", "Jens Kandt", target="_blank"), " (PI), ", tags$a(href = "https://www.geog.ucl.ac.uk//people/academic-staff/paul-longley", "Paul Longley", target="_blank"), " (Co-I), Alistair Leak, ", tags$a(href = "https://www.ucl.ac.uk/geospatial-analytics/people/ffion-carney", "Ffion Carney", target="_blank"), " - University College London"),
+          p("Project partners: Chris Lane (Co-I), Daniel Pass, Phillip Evans, Anne Schweickert, Robert Walker  -  Transport for West Midlands"),
+          h4("Data Sources"),
+          tabBox(
+            width = 12,
+            
+            tabPanel(
+              "Who Travels",
+              p("The trends are based on anonymous bus and tram boardings recorded on smart cards of passengers registered under the English National Concessionary Travel Scheme (ENCTS) in the West Midlands Combined Authority between 2009 and 2016.")
+            ),
+            tabPanel(
+              "Where and When",
+              p("Monthly origin-destination flows of ENCTS passengers between LSOAs between January 2014 and AugustS 2016."),
+              p("The data record the frequency of journeys between LSOAs where it was possible to determine both journeys' origins and destinations. These counts do not represent all journeys and are limited to a specific service provider.")
+            ),
+            tabPanel(
+              "Access to Services",
+              p("Estimates of travel time to selected services based on bus timetables and walking trips along the ITN road network (2010-2016)."),
+              p("Travel time is the mean minimum time to reach the selected service across a 24-hour period calculated at 30 minute intervals."),
+              tags$ul(
+                tags$li("Supermarkets: TBC"),
+                tags$li("GPs, Clinics and Hospitals: TBC"),
+                tags$li("Retail Centres: TBC"),
+                tags$li("Train Stations: TBC")
+              )
+            ),
+            tabPanel(
+              "Who is Eligible",
+              p("Residents eligible for ENCTS in the West Midlands Combined Authority"),
+              tags$ul(
+                tags$li("2010 to 2016 based on ONS mid-year population estimates."),
+                tags$li("2016 to 2041 based on ONS population forecasts.")
+              )
+            ),
+            tabPanel(
+              "General",
+              p("Office for National Statistics"),
+              tags$ul(
+                tags$li("Administrative boundaries (Output Area, Lower Super Output Area, Middle Super Output Area)"),
+                tags$li("Administrative Area Centroids (Output Area, Lower Super Output Area, Middle Super Output Area)")
+              )
+            )
+          )
         )
-      )
+        )
     ),
     skin = "blue"
   )
 }
+
 
 # Server does all the backend work,
 server <- function(input, output, session) {
@@ -531,320 +582,335 @@ server <- function(input, output, session) {
     stopApp()
   })
   session$allowReconnect(T)
-
-  # Progress bar updates through compiling the server code.
-  progressSweetAlert(
-    session = session, id = "myprogress",
-    title = "Work in progress",
-    display_pct = T, value = 0, striped = T
-  )
-
-  # Data Import and preparation ---------------------------------------------
-
-  # identify all input files in the application loading directory.
-  files <- str_c("od_data/", list.files("od_data/"))[1:10]
-
-  # Create an empty list then import each of the raw data files into R, This approach
-  # allows the progress bar to be updated reflecting data loading progress.
-  DT <- list()
-  for (i in 1:length(files)) {
-    DT[[i]] <- fread(files[i])
-    updateProgressBar(session = session, id = "myprogress", value = 50 / length(files) * i, title = paste0("Importing ", i, " of ", length(files), " days."))
-  }
-
-  # Combine all tables into a single data.table
-  DT <- rbindlist(DT)
-  updateProgressBar(session = session, id = "myprogress", value = 70, title = "Combining Data part 1")
-
-  # create the requires three new columns, timestamp, hour and date.
-  DT[, c("timestamp", "hour", "date") := .(ymd_hms(str_c(date, " ", orig_time)), hour(ymd_hms(str_c(date, " ", orig_time))), as.Date(date))]
-
-  # Drop columns from the source data which will be be required at a later time.
-  DT[, c("dest_time", "orig_time", "orig_naptan", "dest_naptan", "tt_id", "orig_n", "dest_n") := NULL]
-
-  updateProgressBar(session = session, id = "myprogress", value = 80, title = "Combining Data part 2")
-
-  # Split and combine the databable. The goal is that a set of rows exist for each level of geography.
-  DT <- rbindlist(list(
-    DT[, c("date", "type", "age", "gender", "n", "hour", "orig_oa11cd", "dest_oa11cd")][, scale := "oa"],
-    DT[, c("date", "type", "age", "gender", "n", "hour", "orig_lsoa11cd", "dest_lsoa11cd")][, scale := "lsoa"],
-    DT[, c("date", "type", "age", "gender", "n", "hour", "orig_msoa11cd", "dest_msoa11cd")][, scale := "msoa"]
-  ))
-  # Update the column names to origin and destination.
-  setnames(DT, c(7, 8), new = c("origin", "destination"))
-
-  # Filter out incomplete cases. (Missing Origin or Destination)
-  DT <- DT[complete.cases(DT)]
-
-  updateProgressBar(session = session, id = "myprogress", value = 90, title = "Optimising the table")
-
-  # Create the data.table key. This is critical to performance.
-  setkey(DT, scale, date, gender, age, hour, type)
-
+  
+  
+  ####### Start of Real Data Import #############################################
+  # This is real data but at a much lower resolution thant he synthetic data. Further,
+  # the data lacks much of the important demographic and time attribution.
+  
+  DT2 <-
+    fread("data/od_data_real/mp_lsoa_avl_10_or_more_81_percent.csv", data.table = F) %>%
+    transmute(
+      date = as.Date(paste0(year, "-", month, "-1")),
+      type = NA,
+      age = NA,
+      gender = NA,
+      n = count,
+      hour = NA,
+      origin = orig,
+      destination = dest,
+      scale = "lsoa"
+    ) %>%
+    data.table()
+  
+  setkey(DT2, scale, date, gender, age, hour, type)
+  
+  ####### End of Real Data Import #############################################
+  
+  
   # Function to add origin and destination latitude and longitude to data.
   add_lat_lon <- . %>%
-    left_join(wm_lookup %>% select(code, longitude, latitude), by = c("origin" = "code")) %>%
+    left_join(area_lookup %>% select(area_code, longitude, latitude), by = c("origin" = "area_code")) %>%
     rename(x_lon = longitude, x_lat = latitude) %>%
-    left_join(wm_lookup %>% select(code, longitude, latitude), by = c("destination" = "code")) %>%
+    left_join(area_lookup %>% select(area_code, longitude, latitude), by = c("destination" = "area_code")) %>%
     rename(y_lon = longitude, y_lat = latitude) %>%
     rename(n = N)
-
+  
   # Function to range standardise frequencies for plotting.
   range01 <- function(x) {
     (x - min(x)) / (((max(x) - min(x))))
   }
-
-
+  
+  
   ###########################################################################
   # Who Travels -------------------------------------------------------------
   ###########################################################################
-
-
+  
+  
+  # These will be used once we have day resolution data.
+  dygraph_data_age <- fread("data/trends/trends_age.csv", data.table = F) %>%
+    filter(age5 >= 61) %>%
+    transmute(date = as.Date(month), age = age5, type, n, npp, pp) %>%
+    tidyr::gather(measure, value, -date, -age, -type)
+  
+  dygraph_data_gender <- fread("data/trends/trends_gender.csv", data.table = F) %>%
+    transmute(date = as.Date(month), gender, n, npp, pp, type) %>%
+    tidyr::gather(measure, value, -date, -gender, -type)
+  
+  
   dygraph_data_1 <- reactive({
-    data <- DT[.("msoa"), .N, by = c("date", "gender")][, as.list(setattr(N, "names", gender)), by = list(date)]
-    if (input$dygraph_time_resolution == "week") {
-      data <- data %>% mutate(date = round_date(date, "week")) %>% group_by(date) %>% summarise_all(.funs = list("sum")) %>% data.table()
-    } else if (input$dygraph_time_resolution == "month") {
-      data <- data %>% mutate(date = round_date(date, "month")) %>% group_by(date) %>% summarise_all(.funs = list("sum")) %>% data.table()
+    data <- dygraph_data_gender
+    if (input$dygraph_time_resolution == "month") {
+      data <- data %>%
+        filter(measure == input$dygraph_statistic, type == input$dygraph_type) %>%
+        transmute(date = round_date(date, "month"), gender, value) %>%
+        tidyr::spread(gender, value) %>%
+        group_by(date) %>%
+        summarise_all(.funs = list("sum")) %>%
+        data.table()
     } else if (input$dygraph_time_resolution == "quarter") {
-      data <- data %>% mutate(date = round_date(date, "3 months")) %>% group_by(date) %>% summarise_all(.funs = list("sum")) %>% data.table()
+      data <- data %>%
+        filter(measure == input$dygraph_statistic, type == input$dygraph_type) %>%
+        transmute(date = round_date(date, "3 months"), gender, value) %>%
+        group_by(date, gender) %>%
+        summarise_all(.funs = list("sum")) %>%
+        tidyr::spread(gender, value) %>%
+        data.table()
     } else {
       data
     }
   })
-
-
+  
+  
   dygraph_data_2 <- reactive({
-    data <- DT[.("msoa"), .N, by = c("date", "age")][, as.list(setattr(N, "names", age)), by = list(date)]
-
-    if (input$dygraph_time_resolution == "week") {
-      data <- data %>% mutate(date = round_date(date, "week")) %>% group_by(date) %>% summarise_all(.funs = list("sum")) %>% data.table()
-    } else if (input$dygraph_time_resolution == "month") {
-      data <- data %>% mutate(date = round_date(date, "month")) %>% group_by(date) %>% summarise_all(.funs = list("sum")) %>% data.table()
+    data <- dygraph_data_age
+    if (input$dygraph_time_resolution == "month") {
+      data <- data %>%
+        filter(measure == input$dygraph_statistic, type == input$dygraph_type) %>%
+        transmute(date = round_date(date, "month"), age, value) %>%
+        tidyr::spread(age, value) %>%
+        group_by(date) %>%
+        summarise_all(.funs = list("sum")) %>%
+        data.table()
     } else if (input$dygraph_time_resolution == "quarter") {
-      data <- data %>% mutate(date = round_date(date, "3 months")) %>% group_by(date) %>% summarise_all(.funs = list("sum")) %>% data.table()
+      data <- data %>%
+        filter(measure == input$dygraph_statistic, type == input$dygraph_type) %>%
+        transmute(date = round_date(date, "3 months"), age, value) %>%
+        group_by(date, age) %>%
+        summarise_all(.funs = list("sum")) %>%
+        tidyr::spread(age, value) %>%
+        data.table()
     } else {
       data
     }
   })
-
-
-
-
-
+  
+  
   # First interactive graph based on gender
   output$dygraph_gender <- renderDygraph({
-
+    
     # Subset DT for msoas and aggregate by date and gender.
     data <- dygraph_data_1()
-
+    
+    if (input$dygraph_statistic == "npp") {
+      stack_case <- FALSE
+      dygraph_statistic <- "Journeys per Person"
+    } else if (input$dygraph_statistic == "pp") {
+      stack_case <- FALSE
+      dygraph_statistic <- "Passengers"
+    } else {
+      stack_case <- TRUE
+      dygraph_statistic <- "Journeys"
+    }
+    
+    
+    
     # Create dygraph based on date and gender
-    dygraph(data = data, main = paste0("Passengers by Gender (",str_to_title(input$dygraph_time_resolution),")"), 
-            group = "dygraphs") %>%
+    dygraph(
+      data = data,
+      main = paste0(
+        str_to_title(input$dygraph_type),
+        " ", dygraph_statistic,
+        " by Gender (", str_to_title(input$dygraph_time_resolution), ")"
+      ),
+      group = "dygraphs"
+    ) %>%
       dyHighlight(
         highlightCircleSize = 5,
         highlightSeriesBackgroundAlpha = 0.2,
         hideOnMouseOut = F
       ) %>%
-      dyOptions(stackedGraph = T)
+      dyOptions(stackedGraph = stack_case)
   })
-
+  
+  
   # Second interactive graph based on age
   output$dygraph_age <- renderDygraph({
-
+    
     # Subset DT for msoas and aggregate by date and gender.
     data <- dygraph_data_2()
-
+    
+    if (input$dygraph_statistic == "npp") {
+      stack_case <- FALSE
+      dygraph_statistic <- "Journeys per Person"
+    } else if (input$dygraph_statistic == "pp") {
+      stack_case <- FALSE
+      dygraph_statistic <- "Passengers"
+    } else {
+      stack_case <- TRUE
+      dygraph_statistic <- "Journeys"
+    }
+    
     # Create dygraph based on date and age
-    dygraph(data = data, main =paste0("Passengers by Age (",str_to_title(input$dygraph_time_resolution),")"), 
-                                     group = "dygraphs") %>%
+    dygraph(
+      data = data,
+      main = paste0(
+        str_to_title(input$dygraph_type),
+        " ", dygraph_statistic,
+        " by Age (", str_to_title(input$dygraph_time_resolution), ")"
+      ),
+      group = "dygraphs"
+    ) %>%
       dyHighlight(
         highlightCircleSize = 5,
         highlightSeriesBackgroundAlpha = 0.2,
         hideOnMouseOut = F
       ) %>%
-      dyOptions(stackedGraph = T) %>%
+      dyOptions(stackedGraph = stack_case) %>%
       dyRangeSelector()
   })
-
-  journeys_n <- reactive({
-    DT[CJ("msoa", c(as.Date(strftime(req(input$dygraph_gender_date_window[[1]]), "%Y-%m-%d")):
-    as.Date(strftime(req(input$dygraph_gender_date_window[[2]]), "%Y-%m-%d")))), .N]
-  })
-
-  output$n_journeys <- renderText({
-    format(journeys_n(), nsmall = 0, big.mark = ",")
-  })
-
-
-  ###########################################################################
-  # Who Travels Where Origin-Destination ------------------------------------
-  ###########################################################################
-
-  wm_lookup <- read.csv("data/spatial_data/wm_lookup.csv")
-  wm_lookup <- data.table(wm_lookup, key = "scale")
-
-  wm_msoa <- wm_lookup["msoa", .(scale, code, longitude, latitude)]
-
-  observeEvent(input$od_c_version, {
-    shinyjs::show("od_c_date_start_2", anim = T, animType = "slide")
-  })
+  
+  area_lookup <- read.csv("data/spatial_data/area_lookup.csv")
+  area_lookup <- data.table(area_lookup, key = "scale")
+  
+  msoa <- area_lookup["msoa", .(scale, area_code, longitude, latitude)]
+  
+ 
+  
+  #############################################################################
+  ##### Who travels Origin - Destination real data ----------------------------
+  #############################################################################
+  
 
   # Comparative OD data Map
-  output$map_com <- renderLeaflet({
+  output$map_com_real <- renderLeaflet({
     leaflet() %>%
       addProviderTiles(providers$CartoDB.Positron) %>%
       setView(-1.703929, 52.447027, zoom = 10)
   })
-
+  
   observe({
-    if (input$od_c_zoom_to == 0) {
-      leafletProxy("map_com") %>% flyTo(lng = -1.891587, lat = 52.484689, zoom = 10)
-    } else if (input$od_c_zoom_to == 1) {
-      leafletProxy("map_com") %>% flyTo(lng = -1.890401, lat = 52.486243, zoom = 13L)
-    } else if (input$od_c_zoom_to == 2) {
-      leafletProxy("map_com") %>% flyTo(lng = -2.081112, lat = 52.512255, zoom = 13L)
-    } else if (input$od_c_zoom_to == 3) {
-      leafletProxy("map_com") %>% flyTo(lng = -1.519693, lat = 52.406822, zoom = 13L)
-    } else if (input$od_c_zoom_to == 4) {
-      leafletProxy("map_com") %>% flyTo(lng = -2.010793, lat = 52.536167, zoom = 13L)
-    } else if (input$od_c_zoom_to == 5) {
-      leafletProxy("map_com") %>% flyTo(lng = -1.777610, lat = 52.411811, zoom = 13L)
-    } else if (input$od_c_zoom_to == 6) {
-      leafletProxy("map_com") %>% flyTo(lng = -1.982919, lat = 52.586214, zoom = 13L)
-    } else if (input$od_c_zoom_to == 7) {
-      leafletProxy("map_com") %>% flyTo(lng = -2.128820, lat = 52.586973, zoom = 13L)
+    if (input$od_c_real_zoom_to == 0) {
+      leafletProxy("map_com_real") %>% flyTo(lng = -1.891587, lat = 52.484689, zoom = 10)
+    } else if (input$od_c_real_zoom_to == 1) {
+      leafletProxy("map_com_real") %>% flyTo(lng = -1.890401, lat = 52.486243, zoom = 13L)
+    } else if (input$od_c_real_zoom_to == 2) {
+      leafletProxy("map_com_real") %>% flyTo(lng = -2.081112, lat = 52.512255, zoom = 13L)
+    } else if (input$od_c_real_zoom_to == 3) {
+      leafletProxy("map_com_real") %>% flyTo(lng = -1.519693, lat = 52.406822, zoom = 13L)
+    } else if (input$od_c_real_zoom_to == 4) {
+      leafletProxy("map_com_real") %>% flyTo(lng = -2.010793, lat = 52.536167, zoom = 13L)
+    } else if (input$od_c_real_zoom_to == 5) {
+      leafletProxy("map_com_real") %>% flyTo(lng = -1.777610, lat = 52.411811, zoom = 13L)
+    } else if (input$od_c_real_zoom_to == 6) {
+      leafletProxy("map_com_real") %>% flyTo(lng = -1.982919, lat = 52.586214, zoom = 13L)
+    } else if (input$od_c_real_zoom_to == 7) {
+      leafletProxy("map_com_real") %>% flyTo(lng = -2.128820, lat = 52.586973, zoom = 13L)
     }
   })
-
-
-
-  observeEvent(input$od_c_period, {
-    if (input$od_c_period != "custom") {
-      shinyjs::show("od_c_date_start_1")
-      shinyjs::hide("od_c_date_start_custom")
+  
+  
+  observeEvent(input$od_c_real_period, {
+    if (input$od_c_real_period != "custom") {
+      shinyjs::show("od_c_real_date_start_1")
+      shinyjs::hide("od_c_real_date_start_custom")
     } else {
-      shinyjs::show("od_c_date_start_custom")
-      shinyjs::hide("od_c_date_start_1")
+      shinyjs::show("od_c_real_date_start_custom")
+      shinyjs::hide("od_c_real_date_start_1")
     }
   })
-
-
-  data_od_s <- reactive({
-    if (input$od_c_period != "custom") {
-      od_c_date_start <- as.Date(input$od_c_date_start_1[[1]])
-      od_c_date_end <- as.Date(input$od_c_date_start_1[[1]]) + as.numeric(input$od_c_period)
-    } else if (input$od_c_period == "custom") {
-      od_c_date_start <- input$od_c_date_start_custom[[1]]
-      od_c_date_end <- input$od_c_date_start_custom[[2]]
-    }
-
-
-    # Aggregate DT. Note the use of the Key to optimise query speed.
-    DT[CJ(
-      c(input$od_c_scale),
-      seq(od_c_date_start, od_c_date_end, by = 1),
-      c(input$od_c_demographics),
-      c(input$od_c_demographics),
-      c(input$od_c_time_1[1]:input$od_c_time_1[2]), c(input$od_c_type_1)
+  
+  
+  data_od_s_real <- reactive({
+    od_c_real_date_start <- as.Date(input$od_c_real_date_start_1[[1]])
+    
+    # Aggregate DT2. Note the use of the Key to optimise query speed.
+    DT2[CJ(
+      c("lsoa"),
+      seq(as.Date(od_c_real_date_start), by = "month", length.out = as.numeric(input$od_c_real_period)),
+      c(NA),
+      c(NA),
+      c(NA),
+      c(NA)
     ),
-    .N,
+    .("N" = sum(n)),
     by = c("origin", "destination")
     ][order(N)] %>% add_lat_lon()
   })
-
-  data_od_c <- reactive({
-
+  
+  
+  data_od_c_real <- reactive({
+    
     # Create progress bar.
     withProgress(message = "Processing Request", value = 0, {
-
+      
       # Update progress bar.
       incProgress(1 / 3, message = "Import Time 1 Data")
-
-      if (input$od_c_period != "custom") {
-        od_c_date_start_1 <- as.Date(input$od_c_date_start_1)
-        od_c_date_end_1 <- as.Date(input$od_c_date_start_1) + as.numeric(input$od_c_period)
-        od_c_date_start_2 <- as.Date(input$od_c_date_start_2)
-        od_c_date_end_2 <- as.Date(input$od_c_date_start_2) + as.numeric(input$od_c_period)
-      } else if (input$od_c_period == "custom") {
-        od_c_date_start_1 <- as.Date(input$od_c_date_start_custom[[1]])
-        od_c_date_end_1 <- as.Date(input$od_c_date_start_custom[[2]])
-        od_c_date_start_2 <- as.Date(input$od_c_date_start_2)
-        od_c_date_end_2 <- as.Date(input$od_c_date_start_2) +
-          (as.Date(input$od_c_date_start_custom[[2]]) - as.Date(input$od_c_date_start_custom[[1]]))
-      }
-
-
+      
+      od_c_date_start_1 <- as.Date(input$od_c_real_date_start_1[[1]])
+      od_c_date_start_2 <- as.Date(input$od_c_real_date_start_2[[1]])
+      
       # Query the data for the first data point parameters.
-      df1 <- DT[CJ(
-        c(input$od_c_scale),
-        seq(od_c_date_start_1, od_c_date_end_1, by = 1),
-        c(input$od_c_demographics),
-        c(input$od_c_demographics),
-        c(input$od_c_time_1[1]:input$od_c_time_1[2]), c(input$od_c_type_1)
+      df1 <- DT2[CJ(
+        c("lsoa"),
+        seq(as.Date(od_c_real_date_start_1), by = "month", length.out = as.numeric(input$od_c_real_period)),
+        c(NA),
+        c(NA),
+        c(NA),
+        c(NA)
       ),
-      .N,
+      .("N" = sum(n)),
       by = c("origin", "destination")
       ] %>% rename(n = N)
-
+      
       # Update progress bar.
       incProgress(1 / 3, message = "Import Time 2 Data")
-
+      
       # Query the data for the second data point parameters.
-      df2 <- DT[CJ(
-        c(input$od_c_scale),
-        seq(od_c_date_start_2, od_c_date_end_2, by = 1),
-        c(input$od_c_demographics),
-        c(input$od_c_demographics),
-        c(input$od_c_time_1[1]:input$od_c_time_1[2]), c(input$od_c_type_1)
+      df2 <- DT2[CJ(
+        c("lsoa"),
+        seq(as.Date(od_c_real_date_start_2), by = "month", length.out = as.numeric(input$od_c_real_period)),
+        c(NA),
+        c(NA),
+        c(NA),
+        c(NA)
       ),
-      .N,
+      .("N" = sum(n)),
       by = c("origin", "destination")
       ] %>% rename(n = N)
-
+      
       # Update progress bar.
       incProgress(1 / 3, message = "Merging Datasets")
-
+      
       # Merge data for time points 1 and 2
       df1 %>%
         full_join(df2, by = c("origin", "destination")) %>%
         mutate(perc_change = as.numeric((n.y - n.x) / n.x) * 100) %>%
-        left_join(wm_lookup, by = c("origin" = "code")) %>%
+        left_join(area_lookup, by = c("origin" = "area_code")) %>%
         rename(x_lon = longitude, x_lat = latitude) %>%
-        left_join(wm_lookup, by = c("destination" = "code")) %>%
+        left_join(area_lookup, by = c("destination" = "area_code")) %>%
         rename(y_lon = longitude, y_lat = latitude) %>%
         arrange(desc(abs(perc_change)))
     })
   })
-
-
-
-  # Update map to reflect new critera. (Static)
-
-  observeEvent(input$od_c_s_update, {
-    shinyjs::hide("od_map_toggle", anim = T, animType = "slide")
-
-
-    if (input$od_c_version == "static") {
+  
+  
+  # Update map to reflect new criteria. (Static)
+  
+  observeEvent(input$od_c_real_s_update, {
+    shinyjs::hide("od_map_real_toggle", anim = T, animType = "slide")
+    
+    
+    if (input$od_c_real_version == "static") {
       # Create progress bar.
       withProgress(message = "Processing Request", value = 0, {
-
+        
         # Update progress bar.
         incProgress(1 / 4, message = "Importing data.")
-
+        
         # request static data based on specified parameters
-        data <- data_od_s() %>%
+        data <- data_od_s_real() %>%
           filter(complete.cases(.)) %>%
           arrange(desc(n)) %>%
-          head(min(input$od_c_nrows, nrow(.)))
-
+          head(min(input$od_c_real_nrows, nrow(.)))
+        
         domain <- c(0, max(data$n))
         # rescale n value to make the scale for mapping consistent.
         data$n <- (range01(data$n) + 0.01)
-
+        
         # Update progress bar.
         incProgress(1 / 4, message = "Interpolating lines.")
-
+        
         # Interpolate lines based on origin and destination lat lons.
         lines <- gcIntermediate(
           as.matrix(data[, c("x_lon", "x_lat")]),
@@ -853,15 +919,15 @@ server <- function(input, output, session) {
           addStartEnd = T,
           sp = T
         )
-
+        
         # subset markers based on scale.
-        mrks <- wm_lookup[.(input$od_c_scale)]
-
+        mrks <- area_lookup[.("lsoa")]
+        
         # Update progress bar.
         incProgress(1 / 4, message = "Building Map.")
-
+        
         # Update static map with new lines data.
-        map <- leafletProxy("map_com", data = lines) %>%
+        map <- leafletProxy("map_com_real", data = lines) %>%
           clearShapes() %>%
           clearControls() %>%
           clearMarkers() %>%
@@ -872,44 +938,44 @@ server <- function(input, output, session) {
           addCircleMarkers(
             lng = mrks$longitude,
             lat = mrks$latitude,
-            layerId = mrks$code,
-            label = mrks$code,
+            layerId = mrks$area_code,
+            label = mrks$area_code,
             radius = 1, weight = 1
           ) %>%
           leaflet::addLegend("bottomright",
-            layerId = "od_map_legend",
-            pal = colorNumeric("Spectral", domain),
-            values = domain,
-            title = "Journeys",
-            opacity = 0.8
+                             layerId = "od_map_real_legend",
+                             pal = colorNumeric("Spectral", domain),
+                             values = domain,
+                             title = "Journeys",
+                             opacity = 0.8
           )
         # Update progress bar.
         incProgress(1 / 4, message = "Done.")
       })
     }
   })
-
-  # Update map to reflect new critera.
-  observeEvent(input$od_c_s_update, {
-    if (input$od_c_version == "comp") {
-      shinyjs::hide("od_map_toggle", anim = T, animType = "slide")
-
+  
+  # Update map to reflect new criteria.
+  observeEvent(input$od_c_real_s_update, {
+    if (input$od_c_real_version == "comp") {
+      shinyjs::hide("od_map_real_toggle", anim = T, animType = "slide")
+      
       # Create progress bar.
       withProgress(message = "Processing Request", value = 0, {
-
+        
         # Update progress bar.
         incProgress(1 / 4, message = "Importing Map Data")
-
-        data <- data_od_c() %>%
+        
+        data <- data_od_c_real() %>%
           filter(complete.cases(.)) %>%
-          head(min(nrow(.), input$od_c_nrows))
-
+          head(min(nrow(.), input$od_c_real_nrows))
+        
         # Create the colour breaks
         binpal <- colorBin("RdYlBu", bins = c(-100, -80, -60, -40, -20, 0, 20, 45, 60, 80, Inf))
-
+        
         # Update progress bar.
         incProgress(1 / 4, message = "Interpolating Lines")
-
+        
         # Interpolate lines based on origin and destination lat lons.
         lines2 <- gcIntermediate(
           as.matrix(data[, c("x_lon", "x_lat")]),
@@ -918,14 +984,14 @@ server <- function(input, output, session) {
           addStartEnd = T,
           sp = T
         )
-
+        
         # subset markers based on scale.
-        mrks <- wm_lookup[.(input$od_c_scale)]
-
+        mrks <- area_lookup[.("lsoa")]
+        
         incProgress(1 / 4, message = "Building Map.")
-
+        
         # Update comparative map with new lines data.
-        map_com <- leafletProxy("map_com", data = lines2) %>%
+        map_com <- leafletProxy("map_com_real", data = lines2) %>%
           clearShapes() %>%
           clearControls() %>%
           clearMarkers() %>%
@@ -933,39 +999,40 @@ server <- function(input, output, session) {
           addCircleMarkers(
             lng = mrks$longitude,
             lat = mrks$latitude,
-            layerId = mrks$code,
-            label = mrks$code,
+            layerId = mrks$area_code,
+            label = mrks$area_code,
             radius = 1, weight = 1
           ) %>%
           leaflet::addLegend("bottomright",
-            layerId = "od_map_legend",
-            pal = colorBin("RdYlBu", bins = c(-100, -80, -60, -40, -20, 0, 20, 45, 60, 80, Inf)),
-            values = c(-100, -80, -60, -40, -20, 0, 20, 45, 60, 80, 120),
-            title = "% Change",
-            labFormat = labelFormat(suffix = "%"),
-            opacity = 0.8
+                             layerId = "od_map_legend",
+                             pal = colorBin("RdYlBu", bins = c(-100, -80, -60, -40, -20, 0, 20, 45, 60, 80, Inf)),
+                             values = c(-100, -80, -60, -40, -20, 0, 20, 45, 60, 80, 120),
+                             title = "% Change",
+                             labFormat = labelFormat(suffix = "%"),
+                             opacity = 0.8
           )
       })
     }
   })
-
+  
+  
   # Add lines to the destination map. Where do people go to?
-  observeEvent(input$map_com_marker_click, {
-    shinyjs::show("od_map_toggle", anim = T, animType = "slide")
-
-    data2a <- data_od_s() %>%
-      filter(origin == input$map_com_marker_click[[1]]) %>%
+  observeEvent(input$map_com_real_marker_click, {
+    shinyjs::show("od_map_real_toggle", anim = T, animType = "slide")
+    
+    data2a <- data_od_s_real() %>%
+      filter(origin == input$map_com_real_marker_click[[1]]) %>%
       mutate(dir = "outbound", colour = "#ff0000")
-
-    data2b <- data_od_s() %>%
-      filter(destination == input$map_com_marker_click[[1]]) %>%
+    
+    data2b <- data_od_s_real() %>%
+      filter(destination == input$map_com_real_marker_click[[1]]) %>%
       mutate(dir = "inbound", colour = "#00ff00")
-
+    
     data2 <- bind_rows(data2a, data2b)
-
+    
     if (nrow(data2) > 0) {
       data2$n <- (range01(data2$n) + 0.1) * 5
-
+      
       # Interpolate lines based on origin and destination lat lons.
       lines <- gcIntermediate(
         as.matrix(data2[, c("x_lon", "x_lat")]),
@@ -974,12 +1041,12 @@ server <- function(input, output, session) {
         addStartEnd = T,
         sp = T
       )
-
+      
       # subset markers based on scale.
-      mrks <- wm_lookup[input$od_c_scale]
-
+      mrks <- area_lookup["lsoa"]
+      
       # Update od outbound map with new lines data.
-      map <- leafletProxy("map_com", data = lines) %>%
+      map <- leafletProxy("map_com_real", data = lines) %>%
         clearShapes() %>%
         clearMarkers() %>%
         addPolylines(
@@ -989,139 +1056,100 @@ server <- function(input, output, session) {
         addCircleMarkers(
           lng = mrks$longitude,
           lat = mrks$latitude,
-          layerId = mrks$code,
-          label = mrks$code,
+          layerId = mrks$area_code,
+          label = mrks$area_code,
           radius = 2, weight = 2
         )
     }
   })
-
-output$od_c_tbl <- renderDataTable(
-
-  if (input$od_c_period != "custom") {
-    if (input$od_c_version == "comp") {
-      data_od_c() %>%
+  
+  
+  
+  output$od_c_real_tbl <- renderDataTable(
+    
+    if (input$od_c_real_version == "comp") {
+      data_od_c_real() %>%
         transmute(origin, destination,
-          T1_period = paste(input$od_c_date_start_1, "-", as.character(as.Date(input$od_c_date_start_1) + as.numeric(input$od_c_period))),
-          T2_period = paste(as.Date(input$od_c_date_start_2), "-", as.character(as.Date(input$od_c_date_start_2) + as.numeric(input$od_c_period))),
-          T1 = n.x, T2 = n.y, perc_change
+                  T1_period = paste(input$od_c_real_date_start_1, "-", as.character(as.Date(input$od_c_real_date_start_1) %m+% months(as.numeric(input$od_c_real_period)) - 1)),
+                  T2_period = paste(as.Date(input$od_c_real_date_start_2), "-", as.character(as.Date(input$od_c_real_date_start_2) %m+% months(as.numeric(input$od_c_real_period)) - 1)),
+                  T1 = n.x, T2 = n.y, perc_change
         ) %>%
-        left_join(wm_lookup %>% select(code, "Origin Name" = msoa11nm), by = c("origin" = "code")) %>%
-        left_join(wm_lookup %>% select(code, "Dest Name" = msoa11nm), by = c("destination" = "code")) %>%
+        left_join(area_lookup %>% select(area_code, "Origin Name" = msoa11nm), by = c("origin" = "area_code")) %>%
+        left_join(area_lookup %>% select(area_code, "Dest Name" = msoa11nm), by = c("destination" = "area_code")) %>%
         select(Origin = origin, Dest = destination, "Origin Name", "Dest Name", T1_period, T2_period, T1, T2, perc_change)
-    } else if (input$od_c_version == "static") {
-      data_od_s() %>%
+    } else if (input$od_c_real_version == "static") {
+      data_od_s_real() %>%
         transmute(origin, destination,
-          T1 = n,
-          period = paste(input$od_c_date_start_1, "-", as.character(as.Date(input$od_c_date_start_1) + as.numeric(input$od_c_period)))
+                  T1 = n,
+                  period = paste(input$od_c_real_date_start_1, "-", as.character(as.Date(input$od_c_real_date_start_1) %m+% months(as.numeric(input$od_c_real_period)) - 1))
         ) %>%
-        left_join(wm_lookup %>% select(code, "Origin Name" = msoa11nm), by = c("origin" = "code")) %>%
-        left_join(wm_lookup %>% select(code, "Dest Name" = msoa11nm), by = c("destination" = "code")) %>%
+        left_join(area_lookup %>% select(area_code, "Origin Name" = msoa11nm), by = c("origin" = "area_code")) %>%
+        left_join(area_lookup %>% select(area_code, "Dest Name" = msoa11nm), by = c("destination" = "area_code")) %>%
         select(Origin = origin, Dest = destination, "Origin Name", "Dest Name", period, T1)
     }
-  } else if (input$od_c_period == "custom") {
-    if (input$od_c_version == "comp") {
-      data_od_c() %>%
-        transmute(origin, destination,
-          T1_period = paste(input$od_c_date_start_custom[[1]], "-", input$od_c_date_start_custom[[2]]),
-          T2_period = paste(as.Date(input$od_c_date_start_2), "-", 
-                            as.character(as.Date(input$od_c_date_start_2) + (as.Date(input$od_c_date_start_custom[[2]]) - as.Date(input$od_c_date_start_custom[[1]])))),
-          T1 = n.x, T2 = n.y, perc_change
-        ) %>%
-        left_join(wm_lookup %>% select(code, "Origin Name" = msoa11nm), by = c("origin" = "code")) %>%
-        left_join(wm_lookup %>% select(code, "Dest Name" = msoa11nm), by = c("destination" = "code")) %>%
-        select(Origin = origin, Dest = destination, "Origin Name", "Dest Name", T1_period, T2_period, T1, T2, perc_change)
-    } else if (input$od_c_version == "static") {
-      data_od_s() %>%
-        transmute(origin, destination, period = paste(input$od_c_date_start_custom[[1]], "-", input$od_c_date_start_custom[[2]]), T1 = n) %>%
-        left_join(wm_lookup %>% select(code, "Origin Name" = msoa11nm), by = c("origin" = "code")) %>%
-        left_join(wm_lookup %>% select(code, "Dest Name" = msoa11nm), by = c("destination" = "code")) %>%
-        select(Origin = origin, Dest = destination, "Origin Name", "Dest Name", period, T1)
-    }
-  }
-
-  ,
-  options = list(pageLength = 10, scrollX = T)
-)
-
-
-
-
+    ,
+    options = list(pageLength = 10, scrollX = T)
+  )
+  
+  
   # Comparative Map, data download handler
-  output$od_c_downloader <- downloadHandler(
+  output$od_c_real_downloader <- downloadHandler(
     filename = function() {
-      paste0(input$od_c_version, "_od.csv")
+      paste0(input$od_c_real_version, "_od.csv")
     },
     content = function(file) {
-      fwrite( if (input$od_c_period != "custom") {
-        if (input$od_c_version == "comp") {
-          data_od_c() %>%
+      fwrite(
+        if (input$od_c_real_version == "comp") {
+          data_od_c_real() %>%
             transmute(origin, destination,
-                      T1_period = paste(input$od_c_date_start_1, "-", as.character(as.Date(input$od_c_date_start_1) + as.numeric(input$od_c_period))),
-                      T2_period = paste(as.Date(input$od_c_date_start_2), "-", as.character(as.Date(input$od_c_date_start_2) + as.numeric(input$od_c_period))),
+                      T1_period = paste(input$od_c_real_date_start_1, "-", as.character(as.Date(input$od_c_real_date_start_1) %m+% months(as.numeric(input$od_c_real_period)) - 1)),
+                      T2_period = paste(as.Date(input$od_c_real_date_start_2), "-", as.character(as.Date(input$od_c_real_date_start_2) %m+% months(as.numeric(input$od_c_real_period)) - 1)),
                       T1 = n.x, T2 = n.y, perc_change
             ) %>%
-            left_join(wm_lookup %>% select(code, "Origin Name" = msoa11nm), by = c("origin" = "code")) %>%
-            left_join(wm_lookup %>% select(code, "Dest Name" = msoa11nm), by = c("destination" = "code")) %>%
+            left_join(area_lookup %>% select(area_code, "Origin Name" = msoa11nm), by = c("origin" = "area_code")) %>%
+            left_join(area_lookup %>% select(area_code, "Dest Name" = msoa11nm), by = c("destination" = "area_code")) %>%
             select(Origin = origin, Dest = destination, "Origin Name", "Dest Name", T1_period, T2_period, T1, T2, perc_change)
-        } else if (input$od_c_version == "static") {
-          data_od_s() %>%
+        } else if (input$od_c_real_version == "static") {
+          data_od_s_real() %>%
             transmute(origin, destination,
                       T1 = n,
-                      period = paste(input$od_c_date_start_1, "-", as.character(as.Date(input$od_c_date_start_1) + as.numeric(input$od_c_period)))
+                      period = paste(input$od_c_real_date_start_1, "-", as.character(as.Date(input$od_c_real_date_start_1) %m+% months(as.numeric(input$od_c_real_period)) - 1))
             ) %>%
-            left_join(wm_lookup %>% select(code, "Origin Name" = msoa11nm), by = c("origin" = "code")) %>%
-            left_join(wm_lookup %>% select(code, "Dest Name" = msoa11nm), by = c("destination" = "code")) %>%
+            left_join(area_lookup %>% select(area_code, "Origin Name" = msoa11nm), by = c("origin" = "area_code")) %>%
+            left_join(area_lookup %>% select(area_code, "Dest Name" = msoa11nm), by = c("destination" = "area_code")) %>%
             select(Origin = origin, Dest = destination, "Origin Name", "Dest Name", period, T1)
-        }
-      } else if (input$od_c_period == "custom") {
-        if (input$od_c_version == "comp") {
-          data_od_c() %>%
-            transmute(origin, destination,
-                      T1_period = paste(input$od_c_date_start_custom[[1]], "-", input$od_c_date_start_custom[[2]]),
-                      T2_period = paste(as.Date(input$od_c_date_start_2), "-", 
-                                        as.character(as.Date(input$od_c_date_start_2) + (as.Date(input$od_c_date_start_custom[[2]]) - as.Date(input$od_c_date_start_custom[[1]])))),
-                      T1 = n.x, T2 = n.y, perc_change
-            ) %>%
-            left_join(wm_lookup %>% select(code, "Origin Name" = msoa11nm), by = c("origin" = "code")) %>%
-            left_join(wm_lookup %>% select(code, "Dest Name" = msoa11nm), by = c("destination" = "code")) %>%
-            select(Origin = origin, Dest = destination, "Origin Name", "Dest Name", T1_period, T2_period, T1, T2, perc_change)
-        } else if (input$od_c_version == "static") {
-          data_od_s() %>%
-            transmute(origin, destination, period = paste(input$od_c_date_start_custom[[1]], "-", input$od_c_date_start_custom[[2]]), T1 = n) %>%
-            left_join(wm_lookup %>% select(code, "Origin Name" = msoa11nm), by = c("origin" = "code")) %>%
-            left_join(wm_lookup %>% select(code, "Dest Name" = msoa11nm), by = c("destination" = "code")) %>%
-            select(Origin = origin, Dest = destination, "Origin Name", "Dest Name", period, T1)
-        }
-      }, file)
+        }, file
+      )
     }
   )
-
-  observeEvent(input$map_com_marker_click, {
-    leafletProxy("map_com") %>% clearControls()
+  
+  
+  
+  observeEvent(input$map_com_real_marker_click, {
+    leafletProxy("map_com_real") %>% clearControls()
   })
-
+  
   # eligibility Plot change graph
-  plot_data3 <- reactive({
-    data2a <- data_od_s() %>%
-      filter(origin == input$map_com_marker_click[[1]]) %>%
+  plot_data3_real <- reactive({
+    data2a <- data_od_s_real() %>%
+      filter(origin == input$map_com_real_marker_click[[1]]) %>%
       mutate(dir = "outbound", colour = "#ff0000") %>%
       arrange(desc(n)) %>%
       head(10)
   })
-
+  
   # eligibility Plot change graph
-  plot_data4 <- reactive({
-    data2b <- data_od_s() %>%
-      filter(destination == input$map_com_marker_click[[1]]) %>%
+  plot_data4_real <- reactive({
+    data2b <- data_od_s_real() %>%
+      filter(destination == input$map_com_real_marker_click[[1]]) %>%
       mutate(dir = "inbound", colour = "#00ff00") %>%
       arrange(desc(n)) %>%
       head(10)
   })
-
-  output$inbound_bokeh_plot <- renderRbokeh({
+  
+  output$inbound_bokeh_plot_real <- renderRbokeh({
     figure(
-      data = plot_data4(),
+      data = plot_data4_real(),
       legend_location = "right",
       xlab = "",
       ylab = "Inbound Count"
@@ -1133,10 +1161,10 @@ output$od_c_tbl <- renderDataTable(
       ) %>%
       theme_axis("x", major_label_orientation = 45)
   })
-
-  output$outbound_bokeh_plot <- renderRbokeh({
+  
+  output$outbound_bokeh_plot_real <- renderRbokeh({
     figure(
-      data = plot_data3(),
+      data = plot_data3_real(),
       legend_location = "right",
       xlab = "",
       ylab = "Outbound Count"
@@ -1148,48 +1176,53 @@ output$od_c_tbl <- renderDataTable(
       ) %>%
       theme_axis("x", major_label_orientation = 45)
   })
-
-
+  
+  
   ### Help tour for Origin Destination data
-  od_steps <- reactive(data.frame(
-    element = c("imaginary", "#od_box_1", "#od_box_2", "#od_box_3", "#od_box_4", "#od_map_id"),
+  od_steps_real <- reactive(data.frame(
+    element = c("imaginary", "#od_box_1_real", "#od_box_2_real", "#od_box_3_real", "#od_box_4_real", "#od_map_id_real"),
     intro = c(
-      "The purpose of this tab is to explore mobility patterns across the West Midlands. You are able to create and 
-            interogate bespoke origin-destination matrices based on dates, times and specific passenger characteristcs.",
-      "First specify the details of the first time period. You should select a date, the time of day and the length of the time period.",
-      "Second, specify the characteristics of the passengers you wish to observe. Options include age, gender and card-type.",
-      "Third, do you wish to make a comparison? If Yes, specify the start date for the comparison. Note, the period and passenger 
-            characteristics will remain the same as for period 1.",
-      "Last, specify plotting details. You can select a range of spatial scales and the number of observations you wish to plot. Once selected, update the Map",
-      "Once the map is plotted, select a circle marker to view local origin-destination data."
+      "The purpose of this tab is to explore mobility patterns across the West Midlands Combined Authority. You are able to create and query origin-destination flows based on dates, times and passenger characteristics.",
+      "First, specify the details of the date and time period you are interested in. The time period refers to the interval for which all flows will be counted, starting from the specified date.",
+      "Next, you can filter flows by passenger gender, age, card time and the time of day.",
+      "Do you wish to compare flows to another time period? If so, choose 'Yes', and specify the start date for the comparison. Note, the period and passenger characteristics will remain the same as for period 1.",
+      "Last, specify plotting details. You can select from a range of spatial scales and the set the maximum number of flows to be plotted between origin-destination pairs. Once you have made your selections, hit 'Update'.",
+      "Once you have updated your map, click on an area to view details."
     )
   ))
-
-  observeEvent(input$od_help, {
-    introjs(session, options = list(steps = od_steps(), "showBullets" = "false", "showProgress" = "true", "showStepNumbers" = "false", "nextLabel" = "Next", "prevLabel" = "Prev"))
+  
+  observeEvent(input$od_help_real, {
+    introjs(session, options = list(steps = od_steps_real(), "showBullets" = "false", "showProgress" = "true", "showStepNumbers" = "false", "nextLabel" = "Next", "prevLabel" = "Prev"))
   })
-
-
+  
+  
+  
+  
+  
+  
+  
+  
   ###########################################################################
   # Accessibility -----------------------------------------------------------
   ###########################################################################
-
+  
   observeEvent(input$ac_c_version, {
     shinyjs::toggle("ac_date_comp")
     shinyjs::toggle("ac_date")
   })
-
+  
   # Import the accessibility data
   ac_dt <- fread("data/accessibility/access_data_tues.csv", data.table = F) %>%
     filter(complete.cases(.)) %>%
     mutate(mean_min_time = round(ceiling(mean_min_time / 60)))
-
-  # Import the wm output areas shapefile.
-  wm_oa <- readShapePoly("data/spatial_data/wm_oa_4326.shp", delete_null_obj = T)
-  wm_oa@data <- wm_oa@data[, c("objectid", "oa11cd")]
-  wm_oa@data$oa11cd <- as.character(wm_oa@data$oa11cd)
-
-  # Import Amenity Shapefiles
+  
+  # Import the output areas shape file.
+  oa <- readShapePoly("data/spatial_data/oa_4326.shp", delete_null_obj = T)
+  oa@data <- oa@data[, c("objectid", "oa11cd")]
+  oa@data$oa11cd <- as.character(oa@data$oa11cd)
+  
+  # Import Accessibility POI Shape files
+  
   clinics <- readShapePoints("data/POIs/Clinics/Clinics.shp")
   gps <- readShapePoints("data/POIs/GPs/GPs.shp")
   hsp <- readShapePoints("data/POIs/Hospitals/Hospitals.shp")
@@ -1201,18 +1234,19 @@ output$od_c_tbl <- renderDataTable(
   sm_v <- sm[sm@data$size_band == "30,138 ft2 > (2,800 m2)", ]
   ts <- readShapePoints("data/POIs/Railway Stations/2016/Railway_Stations_2016.shp")
   rm(sm)
-
+  
   output$ac_map <- renderLeaflet({
     leaflet() %>%
       setView(lng = -1.891587, lat = 52.484689, zoom = 10) %>%
       addProviderTiles(providers$CartoDB.Positron) %>%
-
-      # Example code to add datashine layers into the App.
-
+      
+      # Example area_code to add datashine layers into the App.
+      
       # addTiles(group = "Vulnerability", urlTemplate = "https://maps.cdrc.ac.uk/tiles/shine_urbanmask_dark2/{z}/{x}/{y}.png",
       #          option=tileOptions(tms = F, continuousWorld=T, opacity = 1)) %>%
-
-
+      
+      
+      # Accessibility Amenity Circle Markers
       addCircleMarkers(data = clinics, group = "Clinic", stroke = T, color = "black", weight = 1, fillColor = "#e41a1c", radius = 7, fillOpacity = .8) %>%
       addCircleMarkers(data = gps, group = "GP", stroke = T, color = "black", weight = 1, fillColor = "#377eb8", radius = 7, fillOpacity = .8) %>%
       addCircleMarkers(data = hsp, group = "Hospital", stroke = T, color = "black", weight = 1, fillColor = "#4daf4a", radius = 7, fillOpacity = .8) %>%
@@ -1224,7 +1258,8 @@ output$od_c_tbl <- renderDataTable(
       addCircleMarkers(data = ts, group = "Train Station", stroke = T, color = "black", weight = 1, fillColor = "#f781bf", radius = 7, fillOpacity = .8) %>%
       hideGroup(c("Clinic", "GP", "Supermarket (Small)", "Supermarket (Medium)", "Supermarket (Large)", "Supermarket (Very Large)", "Train Station", "Retail Centre"))
   })
-
+  
+  
   observe({
     if (input$ac_zoom_to == 0) {
       leafletProxy("ac_map") %>% flyTo(lng = -1.891587, lat = 52.484689, zoom = 10)
@@ -1244,17 +1279,17 @@ output$od_c_tbl <- renderDataTable(
       leafletProxy("ac_map") %>% flyTo(lng = -2.128820, lat = 52.586973, zoom = 13L)
     }
   })
-
+  
   # Create Reactive table for static accessibility
-  wm_s_data <- reactive({
-    data <- wm_oa@data %>%
+  s_data <- reactive({
+    data <- oa@data %>%
       left_join(ac_dt %>%
-        filter(date == input$ac_date, type == input$ac_type), by = c("oa11cd" = "origin"))
+                  filter(date == input$ac_date, type == input$ac_type), by = c("oa11cd" = "origin"))
   })
-
+  
   # Create Reactive table for comparative accessibility
-  wm_s_data_comp <- reactive({
-    data <- wm_oa@data %>%
+  s_data_comp <- reactive({
+    data <- oa@data %>%
       left_join(
         ac_dt %>%
           filter(date == input$ac_date_comp[[1]], type == input$ac_type) %>%
@@ -1267,19 +1302,19 @@ output$od_c_tbl <- renderDataTable(
         by = c("oa11cd" = "origin")
       )
   })
-
+  
   output$ac_tbl <- renderDataTable(
     if (input$ac_c_version == "comp") {
-      wm_s_data_comp() %>%
+      s_data_comp() %>%
         transmute(oa11cd, type, T1_date = input$ac_date_comp[[1]], T2_date = input$ac_date_comp[[2]], T1_time = mean_min_time_start, T2_time = mean_min_time_end, Change = mean_min_time)
     } else if (input$ac_c_version == "static") {
-      wm_s_data() %>%
+      s_data() %>%
         select(oa11cd, type, T1_date = date, T1_time = mean_min_time)
     }
     ,
     options = list(pageLength = 10, scrollX = T)
   )
-
+  
   # Comparative Map, data download handler
   output$access_downloader <- downloadHandler(
     filename = function() {
@@ -1288,40 +1323,41 @@ output$od_c_tbl <- renderDataTable(
     content = function(file) {
       fwrite(
         if (input$ac_c_version == "comp") {
-          wm_s_data_comp() %>%
+          s_data_comp() %>%
             transmute(oa11cd, type, T1_date = input$ac_date_comp[[1]], T2_date = input$ac_date_comp[[2]], T1_time = mean_min_time_start, T2_time = mean_min_time_end, Change = mean_min_time)
         } else if (input$ac_c_version == "static") {
-          wm_s_data() %>%
+          s_data() %>%
             select(oa11cd, type, T1_date = date, T1_time = mean_min_time)
         }, file
       )
     }
   )
-
-  # Map update
+  
+  # Accessibility Map update
   observeEvent(input$ac_c_s_update, {
-    wm_oa_cp <- wm_oa
-
+    oa_cp <- oa
+    
     if (input$ac_c_version == "static") {
       palette <- "YlOrRd"
       reverse <- F
-      wm_oa_cp@data <- wm_oa_cp@data %>% left_join(wm_s_data())
-      domain <- c(1, max(abs(wm_oa_cp@data$mean_min_time)))
+      oa_cp@data <- oa_cp@data %>% left_join(s_data())
+      domain <- c(1, max(abs(oa_cp@data$mean_min_time)))
     } else if (input$ac_c_version == "comp") {
       palette <- "RdYlGn"
       reverse <- T
-      wm_oa_cp@data <- wm_oa_cp@data %>% left_join(wm_s_data_comp())
-      domain <- c((-1 * max(abs(wm_oa_cp@data$mean_min_time))), max(abs(wm_oa_cp@data$mean_min_time)))
+      oa_cp@data <- oa_cp@data %>% left_join(s_data_comp())
+      domain <- c((-1 * max(abs(oa_cp@data$mean_min_time))), max(abs(oa_cp@data$mean_min_time)))
     }
-
+    
     leafletProxy("ac_map", deferUntilFlush = F) %>%
       clearShapes() %>%
+      # Update Accessibility
       hideGroup(c(
         "Clinic", "GP", "Hospital", "Supermarket (Small)",
         "Supermarket (Medium)", "Supermarket (Large)", "Supermarket (Very Large)", "Train Station"
       )) %>%
       addPolygons(
-        data = wm_oa_cp[1:2500, ],
+        data = oa_cp[1:2500, ],
         fillOpacity = 0.7,
         smoothFactor = 0,
         color = ~colorNumeric(palette, domain, reverse = reverse)(mean_min_time),
@@ -1331,7 +1367,7 @@ output$od_c_tbl <- renderDataTable(
         highlightOptions = highlightOptions(color = "black", weight = 3, bringToFront = F)
       ) %>%
       addPolygons(
-        data = wm_oa_cp[2501:5000, ],
+        data = oa_cp[2501:5000, ],
         fillOpacity = 0.7,
         smoothFactor = 0,
         color = ~colorNumeric(palette, domain, reverse = reverse)(mean_min_time),
@@ -1341,7 +1377,7 @@ output$od_c_tbl <- renderDataTable(
         highlightOptions = highlightOptions(color = "black", weight = 3, bringToFront = F)
       ) %>%
       addPolygons(
-        data = wm_oa_cp[5001:7500, ],
+        data = oa_cp[5001:7500, ],
         fillOpacity = 0.7,
         smoothFactor = 0,
         color = ~colorNumeric(palette, domain, reverse = reverse)(mean_min_time),
@@ -1351,7 +1387,7 @@ output$od_c_tbl <- renderDataTable(
         highlightOptions = highlightOptions(color = "black", weight = 3, bringToFront = F)
       ) %>%
       addPolygons(
-        data = wm_oa_cp[7501:nrow(wm_oa_cp), ],
+        data = oa_cp[7501:nrow(oa_cp), ],
         fillOpacity = 0.7,
         smoothFactor = 0,
         color = ~colorNumeric(palette, domain, reverse = reverse)(mean_min_time),
@@ -1362,25 +1398,25 @@ output$od_c_tbl <- renderDataTable(
       ) %>%
       showGroup(input$ac_type)
   })
-
+  
   # Update Accessibility Legend.
   observeEvent(input$ac_c_s_update, {
     proxy <- leafletProxy("ac_map")
-
+    
     if (input$ac_c_version == "static") {
       palette <- "YlOrRd"
       title <- "Travel Time (mins)"
-      data <- wm_s_data()
+      data <- s_data()
       reverse <- F
       domain <- c(1, max(abs(data$mean_min_time)))
     } else if (input$ac_c_version == "comp") {
       palette <- "RdYlGn"
       title <- html("Change in Travel Time (mins)")
-      data <- wm_s_data_comp()
+      data <- s_data_comp()
       reverse <- T
       domain <- c(-1 * max(abs(data$mean_min_time)), 0, max(abs(data$mean_min_time)))
     }
-
+    
     pal <- colorNumeric(palette, domain, reverse = reverse)
     proxy %>%
       clearControls() %>%
@@ -1391,18 +1427,18 @@ output$od_c_tbl <- renderDataTable(
         values = domain
       )
   })
-
+  
   observeEvent(input$ac_map_shape_click[[1]], {
     shinyjs::show("ac_map_toggle", anim = T, animType = "slide")
   })
-
+  
   # Reactive Element for accessibility Graph.
   plot_data <- reactive({
     ac_dt %>%
       filter(origin == na.omit(c(input$ac_map_shape_click[[1]], "E00045442"))[1]) %>%
       .[order(.$date), ]
   })
-
+  
   output$access_bokeh_plot <- renderRbokeh({
     figure(
       data = plot_data(),
@@ -1429,40 +1465,40 @@ output$od_c_tbl <- renderDataTable(
         hover = c(mean_min_time, type)
       )
   })
-
+  
   ### Help tour for accessibility
   access_steps <- reactive(data.frame(
     element = c("imaginary", "#ac_box_1", "#ac_box_2", "#ac_box_3", "#ac_box_4", "#ac_map_id"),
     intro = c(
-      "The purpose of this tab is to visualise changes in accessibility across the West Midlands. You can pick 
-            specific amenity types and either view annual elibility or make comparison between years.",
-      "Select the type of Amenity you are interested in.",
-      "Do you want to see a static or comparative map?",
-      "What dates are you interested in?",
-      "Update the Map",
-      "Once the map is plotted, select a circle marker to view local accessibility data."
+      "Measure local access to services in the West Midlands Combined Authority. You can select from a range of services and either view accessibility at one point in time or view changes in accessibility between two points in time. We define accessibility as travel time by bus including waiting time, interchange and walking to/from the bus stop. ",
+      "Select a type of service from the drop-down menu.",
+      "Do you want to measure changes in accessibility between two time points?",
+      "What date(s) are you interested in?",
+      "Update the map.",
+      "Once you have updated your map, click on an area to view details."
     )
   ))
+  
   observeEvent(input$access_help, {
     introjs(session,
-      options =
-        list(
-          steps = access_steps(), "showBullets" = "false",
-          "showProgress" = "true",
-          "showStepNumbers" = "false",
-          "nextLabel" = "Next",
-          "prevLabel" = "Prev",
-          "skipLabel" = "Skip"
-        )
+            options =
+              list(
+                steps = access_steps(), "showBullets" = "false",
+                "showProgress" = "true",
+                "showStepNumbers" = "false",
+                "nextLabel" = "Next",
+                "prevLabel" = "Prev",
+                "skipLabel" = "Skip"
+              )
     )
   })
-
-
+  
+  
   ###########################################################################
   # Eligibility -----------------------------------------------------------
   ###########################################################################
-
-
+  
+  
   # Based on selected inputs, show the correct time slider.
   observeEvent(c(input$elig_source, input$elig_version), {
     if (input$elig_source == "estimate") {
@@ -1491,30 +1527,31 @@ output$od_c_tbl <- renderDataTable(
       }
     }
   })
-
-
+  
+  
   # Import data for eligibility ---------------------------------------------
-  elig_data <- fread("data/eligibility/eligible_pop_wm.csv", data.table = F) %>%
+  elig_data <- fread("data/eligibility/eligible_pop_estimates.csv", data.table = F) %>%
     rename(geo_code = lsoa11cd)
-  elig_forecast <- fread("data/eligibility/elegible_pop_wm_forecast.csv", data.table = F) %>%
-    rename(value = count, geo_code = AREA_CODE)
-
-  wm_lsoa <- readShapePoly("data/spatial_data/wm_lsoa.shp")
-  wm_lsoa@data <- wm_lsoa@data %>% transmute(geo_code = lsoa11cd)
-
-  wm_la <- readShapePoly("data/spatial_data/infuse_dist_lyr_2011_clipped2.shp")
-  wm_la@data <- wm_la@data["geo_code"]
-
-
+  
+  elig_forecast <- fread("data/eligibility/eligible_pop_forecasts.csv", data.table = F) %>%
+    rename(geo_code = area_code)
+  
+  lsoa <- readShapePoly("data/spatial_data/lsoa_4326.shp")
+  lsoa@data <- lsoa@data %>% transmute(geo_code = lsoa11cd)
+  
+  la <- readShapePoly("data/spatial_data/local_authorities_4326.shp")
+  la@data <- la@data["geo_code"]
+  
+  
   # Eligibility Map ---------------------------------------------------------
-
+  
   # Create Leaflet eligibility Map
   output$map_elig <- renderLeaflet({
     leaflet() %>%
       addProviderTiles(providers$CartoDB.Positron) %>%
       setView(-1.703929, 52.447027, zoom = 10)
   })
-
+  
   # Create the back-end for the zoom function
   observe({
     if (input$elig_zoom_to == 0) {
@@ -1535,63 +1572,66 @@ output$od_c_tbl <- renderDataTable(
       leafletProxy("map_elig") %>% flyTo(lng = -2.128820, lat = 52.586973, zoom = 13L)
     }
   })
-
+  
   # Reactive data for Static eligibility Map.
-  wm_lsoa_data <- reactive({
-    elig_data[elig_data$measure == input$elig_year[[1]], ]
+  lsoa_data <- reactive({
+    elig_data[elig_data$year == input$elig_year[[1]], ]
   })
-
+  
   # Reactive data for Static Forecast eligibility map.
-  wm_lsoa_data_forecast <- reactive({
+  lsoa_data_forecast <- reactive({
     elig_forecast[elig_forecast$year == input$elig_forecast_year[[1]], ]
   })
-
-
+  
+  
   # Reactive data for Comparative eligibility Map.
-  wm_lsoa_data_comp <- reactive({
-    elig_data[elig_data$measure == input$elig_year_comp[[1]], ] %>%
-      inner_join(elig_data[elig_data$measure == input$elig_year_comp[[2]], ], by = "geo_code") %>%
+  lsoa_data_comp <- reactive({
+    elig_data[elig_data$year == input$elig_year_comp[[1]], ] %>%
+      inner_join(elig_data[elig_data$year == input$elig_year_comp[[2]], ], by = "geo_code") %>%
       transmute(geo_code, value.y, value.x, value = round(100 * (value.y - value.x) / value.x, 1))
   })
-
+  
   # Reactive data for Comparative eligibility Map.
-  wm_lsoa_data_forecast_comp <- reactive({
+  lsoa_data_forecast_comp <- reactive({
     elig_forecast[elig_forecast$year == input$elig_year_comp_forecast[[1]], ] %>%
       inner_join(elig_forecast[elig_forecast$year == input$elig_year_comp_forecast[[2]], ], by = "geo_code") %>%
       transmute(geo_code, value.y, value.x, perc_change = round((100 * (value.y - value.x) / value.x), 2))
   })
-
-
+  
+  
   output$elig_s_tbl <- renderDataTable(
-
+    
     if (input$elig_source == "estimate") {
       if (input$elig_version == "comp") {
-        wm_lsoa_data_comp() %>%
+        lsoa_data_comp() %>%
           transmute(geo_code,
-            t1_year = input$elig_year_comp[[1]], t2_year = input$elig_year_comp[[2]],
-            t1_pop = value.x, t2_pop = value.y, perc_change = value) %>%
-          left_join(wm_lookup %>% select(code, "Origin Name" = msoa11nm), by = c("geo_code" = "code"))
+                    t1_year = input$elig_year_comp[[1]], t2_year = input$elig_year_comp[[2]],
+                    t1_pop = value.x, t2_pop = value.y, perc_change = value
+          ) %>%
+          left_join(area_lookup %>% select(area_code, "Origin Name" = msoa11nm), by = c("geo_code" = "area_code"))
       } else if (input$elig_version == "static") {
-        wm_lsoa_data() %>%
+        lsoa_data() %>%
           transmute(geo_code, t1_year = input$elig_year_comp[[1]], t1_pop = value) %>%
-          left_join(wm_lookup %>% select(code, "Origin Name" = msoa11nm), by = c("geo_code" = "code"))
+          left_join(area_lookup %>% select(area_code, "Origin Name" = msoa11nm), by = c("geo_code" = "area_code"))
       }
     } else if (input$elig_source == "forecast") {
       if (input$elig_version == "static") {
-        wm_lsoa_data_forecast() %>%
+        lsoa_data_forecast() %>%
           transmute(geo_code, t1_year = input$elig_year_comp_forecast[[1]], t1_pop = value) %>%
-          left_join(wm_lookup %>% select(code, "Origin Name" = msoa11nm), by = c("geo_code" = "code"))
-        } else if (input$elig_version == "comp") {
-        wm_lsoa_data_forecast_comp() %>%
-            transmute(geo_code, t1_year =input$elig_year_comp_forecast[[1]], 
-                      t2_year = input$elig_year_comp_forecast[[2]], t1_pop = value.x, t2_pop = value.y, perc_change) %>%
-            left_join(wm_lookup %>% select(code, "Origin Name" = msoa11nm), by = c("geo_code" = "code"))
+          left_join(area_lookup %>% select(area_code, "Origin Name" = msoa11nm), by = c("geo_code" = "area_code"))
+      } else if (input$elig_version == "comp") {
+        lsoa_data_forecast_comp() %>%
+          transmute(geo_code,
+                    t1_year = input$elig_year_comp_forecast[[1]],
+                    t2_year = input$elig_year_comp_forecast[[2]], t1_pop = value.x, t2_pop = value.y, perc_change
+          ) %>%
+          left_join(area_lookup %>% select(area_code, "Origin Name" = msoa11nm), by = c("geo_code" = "area_code"))
       }
     },
     options = list(pageLength = 10, scrollX = TRUE)
   )
-
-
+  
+  
   # Comparative Map, data download handler
   output$elig_downloader <- downloadHandler(
     filename = function() {
@@ -1601,119 +1641,121 @@ output$od_c_tbl <- renderDataTable(
       fwrite(
         if (input$elig_source == "estimate") {
           if (input$elig_version == "comp") {
-            wm_lsoa_data_comp() %>%
+            lsoa_data_comp() %>%
               transmute(geo_code,
                         t1_year = input$elig_year_comp[[1]], t2_year = input$elig_year_comp[[2]],
-                        t1_pop = value.x, t2_pop = value.y, perc_change = value) %>%
-              left_join(wm_lookup %>% select(code, "Origin Name" = msoa11nm), by = c("geo_code" = "code"))
+                        t1_pop = value.x, t2_pop = value.y, perc_change = value
+              ) %>%
+              left_join(area_lookup %>% select(area_code, "Origin Name" = msoa11nm), by = c("geo_code" = "area_code"))
           } else if (input$elig_version == "static") {
-            wm_lsoa_data() %>%
+            lsoa_data() %>%
               transmute(geo_code, t1_year = input$elig_year_comp[[1]], t1_pop = value) %>%
-              left_join(wm_lookup %>% select(code, "Origin Name" = msoa11nm), by = c("geo_code" = "code"))
+              left_join(area_lookup %>% select(area_code, "Origin Name" = msoa11nm), by = c("geo_code" = "area_code"))
           }
         } else if (input$elig_source == "forecast") {
           if (input$elig_version == "static") {
-            wm_lsoa_data_forecast() %>%
+            lsoa_data_forecast() %>%
               transmute(geo_code, t1_year = input$elig_year_comp_forecast[[1]], t1_pop = value) %>%
-              left_join(wm_lookup %>% select(code, "Origin Name" = msoa11nm), by = c("geo_code" = "code"))
+              left_join(area_lookup %>% select(area_code, "Origin Name" = msoa11nm), by = c("geo_code" = "area_code"))
           } else if (input$elig_version == "comp") {
-            wm_lsoa_data_forecast_comp() %>%
-              transmute(geo_code, t1_year =input$elig_year_comp_forecast[[1]], 
-                        t2_year = input$elig_year_comp_forecast[[2]], t1_pop = value.x, t2_pop = value.y, perc_change) %>%
-              left_join(wm_lookup %>% select(code, "Origin Name" = msoa11nm), by = c("geo_code" = "code"))
+            lsoa_data_forecast_comp() %>%
+              transmute(geo_code,
+                        t1_year = input$elig_year_comp_forecast[[1]],
+                        t2_year = input$elig_year_comp_forecast[[2]], t1_pop = value.x, t2_pop = value.y, perc_change
+              ) %>%
+              left_join(area_lookup %>% select(area_code, "Origin Name" = msoa11nm), by = c("geo_code" = "area_code"))
           }
         }
         , file
       )
     }
   )
-
+  
   # Map update
   observeEvent(input$elig_update, {
     if (input$elig_source == "estimate") {
-      wm_temp <- wm_lsoa
-
+      temp <- lsoa
+      
       if (input$elig_version == "static") {
         palette <- "Blues"
-        wm_temp@data <- wm_temp@data %>% left_join(wm_lsoa_data(), by = "geo_code")
-        domain <- c(1, max(abs(wm_temp@data$value)))
+        temp@data <- temp@data %>% left_join(lsoa_data(), by = "geo_code")
+        domain <- c(1, max(abs(temp@data$count)))
         suffix <- ""
       } else if (input$elig_version == "comp") {
-        wm_temp@data <- wm_temp@data %>% left_join(wm_lsoa_data_comp(), by = "geo_code")
+        temp@data <- temp@data %>% left_join(lsoa_data_comp(), by = "geo_code")
         palette <- "RdYlGn"
-        domain <- c(-1 * max(abs(wm_temp@data$value)), 0, max(abs(wm_temp@data$value)))
+        domain <- c(-1 * max(abs(temp@data$count)), 0, max(abs(temp@data$count)))
         suffix <- " %"
       }
     } else if (input$elig_source == "forecast") {
-      wm_temp <- wm_la
+      temp <- la
       if (input$elig_version == "static") {
         palette <- "Blues"
-        wm_temp@data <- wm_temp@data %>% left_join(wm_lsoa_data_forecast(), by = "geo_code")
-        domain <- c(1, max(abs(wm_temp@data$value)))
+        temp@data <- temp@data %>% left_join(lsoa_data_forecast(), by = "geo_code")
+        domain <- c(1, max(abs(temp@data$count)))
         suffix <- ""
       } else if (input$elig_version == "comp") {
-        wm_temp@data <- wm_temp@data %>% left_join(wm_lsoa_data_forecast_comp() %>%
-          rename(value = perc_change), by = "geo_code")
+        temp@data <- temp@data %>% left_join(lsoa_data_forecast_comp() %>%
+                                               rename(count = perc_change), by = "geo_code")
         palette <- "RdYlGn"
-        domain <- c(-1 * max(abs(wm_temp@data$value)), 0, max(abs(wm_temp@data$value)))
+        domain <- c(-1 * max(abs(temp@data$count)), 0, max(abs(temp@data$count)))
         suffix <- " %"
       }
     }
-
-
-
+    
+    
     leafletProxy("map_elig") %>%
       clearShapes() %>%
       addPolygons(
-        data = wm_temp[1:floor(nrow(wm_temp@data) / 2), ],
+        data = temp[1:floor(nrow(temp@data) / 2), ],
         smoothFactor = 0,
         fillOpacity = 0.7,
-        label = ~htmlEscape(paste0(geo_code, " : ", value, suffix)),
+        label = ~htmlEscape(paste0(geo_code, " : ", count, suffix)),
         highlightOptions = highlightOptions(color = "black", weight = 3, bringToFront = F),
         layerId = ~geo_code,
-        color = ~colorNumeric(palette, domain = domain)(value), weight = .5
+        color = ~colorNumeric(palette, domain = domain)(count), weight = .5
       ) %>%
       addPolygons(
-        data = wm_temp[(floor(nrow(wm_temp@data) / 2) + 1):nrow(wm_temp@data), ],
+        data = temp[(floor(nrow(temp@data) / 2) + 1):nrow(temp@data), ],
         smoothFactor = 0,
         fillOpacity = 0.7,
         layerId = ~geo_code,
-        label = ~htmlEscape(paste0(geo_code, " : ", value, suffix)),
+        label = ~htmlEscape(paste0(geo_code, " : ", count, suffix)),
         highlightOptions = highlightOptions(color = "black", weight = 3, bringToFront = F),
-        color = ~colorNumeric(palette, domain = domain)(value), weight = .5
+        color = ~colorNumeric(palette, domain = domain)(count), weight = .5
       )
   })
-
+  
   # Update Eligibility Legend.
   observeEvent(input$elig_update, {
     proxy <- leafletProxy("map_elig")
-
+    
     if (input$elig_source == "estimate") {
       if (input$elig_version == "static") {
-        title <- ""
+        title <- "People"
         palette <- "Blues"
-        data <- wm_lsoa_data()
-        domain <- c(1, max(abs(data$value)))
+        data <- lsoa_data()
+        domain <- c(1, max(abs(data$count)))
       } else if (input$elig_version == "comp") {
-        title <- ""
-        data <- wm_lsoa_data_comp()
+        title <- "% Change"
+        data <- lsoa_data_comp()
         palette <- "RdYlGn"
-        domain <- c(-1 * max(abs(data$value)), 0, max(abs(data$value)))
+        domain <- c(-1 * max(abs(data$count)), 0, max(abs(data$count)))
       }
     } else if (input$elig_source == "forecast") {
       if (input$elig_version == "static") {
-        title <- ""
+        title <- "People"
         palette <- "Blues"
-        data <- wm_lsoa_data_forecast()
-        domain <- c(1, max(abs(data$value)))
+        data <- lsoa_data_forecast()
+        domain <- c(1, max(abs(data$count)))
       } else if (input$elig_version == "comp") {
-        title <- ""
-        data <- wm_lsoa_data_forecast_comp() %>% rename(value = perc_change)
+        title <- "Change"
+        data <- lsoa_data_forecast_comp() %>% rename(count = perc_change)
         palette <- "RdYlGn"
-        domain <- c(-1 * max(abs(data$value)), 0, max(abs(data$value)))
+        domain <- c(-1 * max(abs(data$count)), 0, max(abs(data$count)))
       }
     }
-
+    
     pal <- colorNumeric(palette, domain)
     proxy %>% clearControls()
     proxy %>% addLegend(
@@ -1723,31 +1765,28 @@ output$od_c_tbl <- renderDataTable(
       values = domain
     )
   })
-
+  
   observeEvent(input$map_elig_shape_click[[1]], {
     shinyjs::show("map_elig_toggle", anim = T, animType = "slide")
   })
-
-
   
   
-    # eligibility Plot change graph
+  
+  
+  # eligibility Plot change graph
   plot_data2 <- reactive({
     if (input$elig_source == "estimate") {
       elig_data %>%
-      filter(geo_code == na.omit(c(input$map_elig_shape_click[[1]], "E01008882"))[1]) %>%
-      .[order(.$measure), ]
-  } else if (input$elig_source == "forecast") {
-    elig_forecast %>% 
-      filter(geo_code == na.omit(c(input$map_elig_shape_click[[1]], "E08000025"))[1]) %>%
-      rename(measure = year) %>%
-      .[order(.$measure), ]
-  }
+        filter(geo_code == na.omit(c(input$map_elig_shape_click[[1]], "E01008882"))[1]) %>%
+        .[order(.$year), ]
+    } else if (input$elig_source == "forecast") {
+      elig_forecast %>%
+        filter(geo_code == na.omit(c(input$map_elig_shape_click[[1]], "E08000025"))[1]) %>%
+        .[order(.$year), ]
+    }
   })
-
   
   
-
   output$c_bokeh_plot <- renderRbokeh({
     figure(
       data = plot_data2(),
@@ -1756,48 +1795,48 @@ output$od_c_tbl <- renderDataTable(
       ylab = "Count"
     ) %>%
       ly_lines(
-        x = measure,
-        y = value,
+        x = year,
+        y = count,
         width = 2
       )
   })
-
-  ### Help tour for Elefibility
+  
+  ### Help tour for Eligibility
   eligibility_steps <- reactive(data.frame(
-    element = c("imaginary", "#elig_box_1", "#elig_box_2", "#elig_box_3", "#elig_map_id"),
+    element = c("imaginary", "#elig_box_0", "#elig_box_1", "#elig_box_2", "#elig_box_3", "#elig_map_id"),
     intro = c(
-      "The purpose of this tab is to visualise changes in eligibility for concessionary 
-            services across the West Midlands. You can either view annual elibility or make comparison between years.",
-      "Do you want to see a static or comparative map?",
-      "What dates are you interested in?",
-      "Update the Map",
-      "Once the map is plotted, select a circle marker to view local eligibility data."
+      "Measure the number of residents who are eligible to the English National Concessionary Travel Scheme (ENCTS). You can view either historic figures or forecast figures of eligible residents.",
+      "Do you want to see historic figures of eligible residents or forecast figures? Note: forecast figures are only available for local authorities.",
+      "Do you want to measure changes in local eligibility between two time points?",
+      "What date(s) are you interested in?",
+      "Update the Map.",
+      "Once you have updated your map, click on an area to view details."
     )
   ))
+  
   observeEvent(input$elig_help, {
     introjs(session,
-      options =
-        list(
-          steps = eligibility_steps(),
-          "showBullets" = "false",
-          "showProgress" = "true",
-          "showStepNumbers" = "false",
-          "nextLabel" = "Next",
-          "prevLabel" = "Prev",
-          "skipLabel" = "Skip"
-        )
+            options =
+              list(
+                steps = eligibility_steps(),
+                "showBullets" = "false",
+                "showProgress" = "true",
+                "showStepNumbers" = "false",
+                "nextLabel" = "Next",
+                "prevLabel" = "Prev",
+                "skipLabel" = "Skip"
+              )
     )
   })
-
+  
   # Force Shiny to Render the leaflet maps strait away.
   outputOptions(output, "dygraph_gender", suspendWhenHidden = F)
   outputOptions(output, "dygraph_age", suspendWhenHidden = F)
   outputOptions(output, "map_elig", suspendWhenHidden = F)
   outputOptions(output, "ac_map", suspendWhenHidden = F)
-  outputOptions(output, "map_com", suspendWhenHidden = F)
+  outputOptions(output, "map_com_real", suspendWhenHidden = F)
+  
 
-  updateProgressBar(session = session, id = "myprogress", value = 100, title = "Done!")
-  closeSweetAlert(session = session)
 }
 
 shinyApp(ui, server, enableBookmarking = "url")
