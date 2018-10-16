@@ -3,7 +3,7 @@ library(tidyverse)
 
 
 ################################################################################
-######### Based on population forcast data                            ##########
+######### Based on population forecast data                            ##########
 ################################################################################
 
 read_csv('data/eligibility/local_authority_pop_estimates.csv') %>%
@@ -40,7 +40,6 @@ pop_2017 <-
   gather(year, count, -AREA_CODE)
 
 
-#64.5
 #63.75
 pop_2018 <- 
   data %>% 
