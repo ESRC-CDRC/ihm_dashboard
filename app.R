@@ -21,6 +21,12 @@ library(maptools) # read and write shapefiles
 library(shinyjs) # Additional java script functionality
 library(forcats) # Helper functions for working with factors
 library(rintrojs) # Javascript based introduction to app
+library(DT) # package for rendering data tables
+
+#here are the SQL/connection packages
+library(RPostgreSQL)
+library(DBI)
+library(glue)
 
 # options(shiny.trace = T)
 
