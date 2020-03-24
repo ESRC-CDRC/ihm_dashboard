@@ -8,6 +8,7 @@
 library(shinydashboard) # Dashboard.
 library(data.table) # Use of data.tables - high performance data in R
 library(leaflet) # Interface to leaflet maps
+library(leaflet.minicharts) # Display flows on leaflet maps
 library(RColorBrewer) # Color Ramps
 library(dplyr) # tools for data manipulation
 library(stringr) # tools for handling strings
@@ -28,8 +29,21 @@ library(RPostgreSQL)
 library(DBI)
 library(glue)
 
-# options(shiny.trace = T)
+#load in the env variables
+db_name=Sys.getenv("DBNAME")
+host_name=Sys.getenv("HOSTNAME")
+user_name=Sys.getenv("AGGDASHUSERNAME")
+password_name=Sys.getenv("AGGDASHPASSNAME")
 
+
+#set up a connection
+con <- dbConnect(dbDriver("PostgreSQL"), 
+                 dbname = db_name, 
+                 host = host_name, 
+                 user = user_name, 
+                 password = password_name)
+
+#actual function part of app begins
 ui <- function(request) {
   dashboardPage(
     dashboardHeader(title = "Dashboard"),
@@ -71,7 +85,7 @@ ui <- function(request) {
                   circle = TRUE, status = "danger", icon = icon("gear"), width = "200px",
                   selectInput(
                     inputId = "dygraph_statistic", label = "Statistic",
-                    choices = list("Passengers" = "pp", "Journeys" = "n", "Journeys per person" = "npp")
+                    choices = list("Passengers" = "passenger", "Journeys" = "journeys", "Journeys per person" = "journeys_pp")
                   ),
                   selectInput(
                     inputId = "dygraph_type", label = "Passenger Type",
@@ -589,39 +603,6 @@ server <- function(input, output, session) {
   })
   session$allowReconnect(T)
   
-  
-  ####### Start of Real Data Import #############################################
-  # This is real data but at a much lower resolution thant he synthetic data. Further,
-  # the data lacks much of the important demographic and time attribution.
-  
-  DT2 <-
-    fread("data/od_data_real/mp_lsoa_avl_10_or_more_81_percent.csv", data.table = F) %>%
-    transmute(
-      date = as.Date(paste0(year, "-", month, "-1")),
-      type = NA,
-      age = NA,
-      gender = NA,
-      n = count,
-      hour = NA,
-      origin = orig,
-      destination = dest,
-      scale = "lsoa"
-    ) %>%
-    data.table()
-  
-  setkey(DT2, scale, date, gender, age, hour, type)
-  
-  ####### End of Real Data Import #############################################
-  
-  
-  # Function to add origin and destination latitude and longitude to data.
-  add_lat_lon <- . %>%
-    left_join(area_lookup %>% select(area_code, longitude, latitude), by = c("origin" = "area_code")) %>%
-    rename(x_lon = longitude, x_lat = latitude) %>%
-    left_join(area_lookup %>% select(area_code, longitude, latitude), by = c("destination" = "area_code")) %>%
-    rename(y_lon = longitude, y_lat = latitude) %>%
-    rename(n = N)
-  
   # Function to range standardise frequencies for plotting.
   range01 <- function(x) {
     (x - min(x)) / (((max(x) - min(x))))
@@ -634,61 +615,26 @@ server <- function(input, output, session) {
   
   
   # These will be used once we have day resolution data.
-  dygraph_data_age <- fread("data/trends/trends_age.csv", data.table = F) %>%
-    filter(age5 >= 61) %>%
-    transmute(date = as.Date(month), age = age5, type, n, npp, pp) %>%
-    tidyr::gather(measure, value, -date, -age, -type)
-  
-  dygraph_data_gender <- fread("data/trends/trends_gender.csv", data.table = F) %>%
-    transmute(date = as.Date(month), gender, n, npp, pp, type) %>%
-    tidyr::gather(measure, value, -date, -gender, -type)
-  
   
   dygraph_data_1 <- reactive({
-    data <- dygraph_data_gender
-    if (input$dygraph_time_resolution == "month") {
-      data <- data %>%
-        filter(measure == input$dygraph_statistic, type == input$dygraph_type) %>%
-        transmute(date = round_date(date, "month"), gender, value) %>%
-        tidyr::spread(gender, value) %>%
-        group_by(date) %>%
-        summarise_all(.funs = list("sum")) %>%
-        data.table()
-    } else if (input$dygraph_time_resolution == "quarter") {
-      data <- data %>%
-        filter(measure == input$dygraph_statistic, type == input$dygraph_type) %>%
-        transmute(date = round_date(date, "3 months"), gender, value) %>%
-        group_by(date, gender) %>%
-        summarise_all(.funs = list("sum")) %>%
-        tidyr::spread(gender, value) %>%
-        data.table()
-    } else {
-      data
-    }
+    
+    data <- dbGetQuery(con, glue("SELECT gender, SUM({input$dygraph_statistic}) AS value, CAST(DATE_TRUNC('{input$dygraph_time_resolution}', date) AS DATE) AS date FROM {schema_name}.dygraph_gender ",
+                                 "WHERE type='{input$dygraph_type}' GROUP BY gender, CAST(DATE_TRUNC('{input$dygraph_time_resolution}', date) AS DATE) AS date;"))
+    
+    data <- dcast(data, date ~ gender, value.var = c("value"), fun.aggregate = sum)
+    
+    data
   })
   
   
   dygraph_data_2 <- reactive({
-    data <- dygraph_data_age
-    if (input$dygraph_time_resolution == "month") {
-      data <- data %>%
-        filter(measure == input$dygraph_statistic, type == input$dygraph_type) %>%
-        transmute(date = round_date(date, "month"), age, value) %>%
-        tidyr::spread(age, value) %>%
-        group_by(date) %>%
-        summarise_all(.funs = list("sum")) %>%
-        data.table()
-    } else if (input$dygraph_time_resolution == "quarter") {
-      data <- data %>%
-        filter(measure == input$dygraph_statistic, type == input$dygraph_type) %>%
-        transmute(date = round_date(date, "3 months"), age, value) %>%
-        group_by(date, age) %>%
-        summarise_all(.funs = list("sum")) %>%
-        tidyr::spread(age, value) %>%
-        data.table()
-    } else {
-      data
-    }
+    
+    data <- dbGetQuery(con, glue("SELECT age, SUM({input$dygraph_statistic}) AS value, CAST(DATE_TRUNC('{input$dygraph_time_resolution}', date) AS DATE) AS date FROM {schema_name}.dygraph_age ",
+                                 "WHERE type='{input$dygraph_type}' GROUP BY age, CAST(DATE_TRUNC('{input$dygraph_time_resolution}', date) AS DATE) AS date;"))
+    
+    data <- dcast(data, date ~ age, value.var = c("value"), fun.aggregate = sum)
+    
+    data
   })
   
   
@@ -698,10 +644,10 @@ server <- function(input, output, session) {
     # Subset DT for msoas and aggregate by date and gender.
     data <- dygraph_data_1()
     
-    if (input$dygraph_statistic == "npp") {
+    if (input$dygraph_statistic == "journeys_pp") {
       stack_case <- FALSE
       dygraph_statistic <- "Journeys per Person"
-    } else if (input$dygraph_statistic == "pp") {
+    } else if (input$dygraph_statistic == "passengers") {
       stack_case <- FALSE
       dygraph_statistic <- "Passengers"
     } else {
@@ -736,10 +682,10 @@ server <- function(input, output, session) {
     # Subset DT for msoas and aggregate by date and gender.
     data <- dygraph_data_2()
     
-    if (input$dygraph_statistic == "npp") {
+    if (input$dygraph_statistic == "journeys_pp") {
       stack_case <- FALSE
       dygraph_statistic <- "Journeys per Person"
-    } else if (input$dygraph_statistic == "pp") {
+    } else if (input$dygraph_statistic == "passengers") {
       stack_case <- FALSE
       dygraph_statistic <- "Passengers"
     } else {
@@ -765,11 +711,6 @@ server <- function(input, output, session) {
       dyOptions(stackedGraph = stack_case) %>%
       dyRangeSelector()
   })
-  
-  area_lookup <- read.csv("data/spatial_data/area_lookup.csv")
-  area_lookup <- data.table(area_lookup, key = "scale")
-  
-  msoa <- area_lookup["msoa", .(scale, area_code, longitude, latitude)]
   
  
   
@@ -818,76 +759,54 @@ server <- function(input, output, session) {
   
   
   data_od_s_real <- reactive({
-    od_c_real_date_start <- as.Date(input$od_c_real_date_start_1[[1]])
     
-    # Aggregate DT2. Note the use of the Key to optimise query speed.
-    DT2[CJ(
-      c("lsoa"),
-      seq(as.Date(od_c_real_date_start), by = "month", length.out = as.numeric(input$od_c_real_period)),
-      c(NA),
-      c(NA),
-      c(NA),
-      c(NA)
-    ),
-    .("N" = sum(n)),
-    by = c("origin", "destination")
-    ][order(N)] %>% add_lat_lon()
+    #get parameters
+    age_string <- toString(sprintf("'%s'", input$od_c_real_demographics[grep("^[0-9]+$",input$od_c_real_demographics)]))
+    
+    gender_string <- toString(sprintf("'%s'", input$od_c_real_demographics[grep("^[A-Z]+$",input$od_c_real_demographics)]))
+    
+    #do the main query
+    DT2_s <- setDT(dbGetQuery(con, glue("SELECT j1.sum_nf, j1.origin, j1.destination, j1.orig_lat, j1.orig_lon, st_x(y1.geometry) AS dest_lon, st_y(y1.geometry) AS dest_lat ",
+                                        "FROM (SELECT flow1.sum_nf, flow1.origin, flow1.destination, st_x(x1.geometry) AS orig_lon, st_y(x1.geometry) AS orig_lat ",
+                                        "FROM (SELECT SUM(flow) AS sum_nf, origin, destination ",
+                                        "FROM {schema_name}.lsoa_flows ",
+                                        "WHERE gender IN ({gender_string}) AND age IN ({age_string}) AND (date BETWEEN '{as.Date(input$od_c_real_date_start_1[[1]])}' AND DATE '{as.Date(input$od_c_real_date_start_1[[1]])}' + INTERVAL '{input$od_c_real_period-1} days') ",
+                                        "GROUP BY origin, destination) flow1 ",
+                                        "LEFT JOIN {schema_name}.all_points_wgs x1 ON (flow1.origin=x1.area_code)) j1 ",
+                                        "LEFT JOIN {schema_name}.all_points_wgs y1 ON (j1.destination=y1.area_code) ",
+                                        "ORDER BY sum_nf DESC;")))
+    
+    DT2_s <- na.omit(DT2_s, cols=c("origin", "destination", "orig_lon", "orig_lat", "dest_lon", "dest_lat"))
+    
+    DT2_s
   })
   
   
   data_od_c_real <- reactive({
     
-    # Create progress bar.
-    withProgress(message = "Processing Request", value = 0, {
-      
-      # Update progress bar.
-      incProgress(1 / 3, message = "Import Time 1 Data")
-      
-      od_c_date_start_1 <- as.Date(input$od_c_real_date_start_1[[1]])
-      od_c_date_start_2 <- as.Date(input$od_c_real_date_start_2[[1]])
-      
-      # Query the data for the first data point parameters.
-      df1 <- DT2[CJ(
-        c("lsoa"),
-        seq(as.Date(od_c_real_date_start_1), by = "month", length.out = as.numeric(input$od_c_real_period)),
-        c(NA),
-        c(NA),
-        c(NA),
-        c(NA)
-      ),
-      .("N" = sum(n)),
-      by = c("origin", "destination")
-      ] %>% rename(n = N)
-      
-      # Update progress bar.
-      incProgress(1 / 3, message = "Import Time 2 Data")
-      
-      # Query the data for the second data point parameters.
-      df2 <- DT2[CJ(
-        c("lsoa"),
-        seq(as.Date(od_c_real_date_start_2), by = "month", length.out = as.numeric(input$od_c_real_period)),
-        c(NA),
-        c(NA),
-        c(NA),
-        c(NA)
-      ),
-      .("N" = sum(n)),
-      by = c("origin", "destination")
-      ] %>% rename(n = N)
-      
-      # Update progress bar.
-      incProgress(1 / 3, message = "Merging Datasets")
-      
-      # Merge data for time points 1 and 2
-      df1 %>%
-        full_join(df2, by = c("origin", "destination")) %>%
-        mutate(perc_change = as.numeric((n.y - n.x) / n.x) * 100) %>%
-        left_join(area_lookup, by = c("origin" = "area_code")) %>%
-        rename(x_lon = longitude, x_lat = latitude) %>%
-        left_join(area_lookup, by = c("destination" = "area_code")) %>%
-        rename(y_lon = longitude, y_lat = latitude) %>%
-        arrange(desc(abs(perc_change)))
-    })
+    #get parameters
+    age_string <- toString(sprintf("'%s'", input$od_c_real_demographics[grep("^[0-9]+$",input$od_c_real_demographics)]))
+    
+    gender_string <- toString(sprintf("'%s'", input$od_c_real_demographics[grep("^[A-Z]+$",input$od_c_real_demographics)]))
+    
+    #do the main query
+    
+    DT2_c <- setDT(dbGetQuery(con, glue("SELECT coord1.perc_change, coord1.n_change, coord1.sum_nf_first AS n1, coord1.sum_nf_second AS n2, coord1.origin AS origin, coord1.destination AS destination, coord1.orig_lat, coord1.orig_lon, st_x(y1.geometry) AS dest_lon, st_y(y1.geometry) AS dest_lat FROM ",
+                                        "(SELECT ROUND(((j1.sum_nf_second-j1.sum_nf_first)/j1.sum_nf_first)*100.0) AS perc_change, j1.sum_nf_second-j1.sum_nf_first AS n_change, j1.sum_nf_second, j1.sum_nf_first, j1.origin_first AS origin, j1.destination_first AS destination, st_x(x1.geometry) AS orig_lon, st_y(x1.geometry) AS orig_lat FROM ",
+                                        "((SELECT CAST(SUM(flow) AS float) AS sum_nf_first, origin AS origin_first, destination AS destination_first ",
+                                        "FROM {schema_name}.lsoa_flows  ",
+                                        "WHERE gender IN ({gender_string}) AND age IN ({age_string}) AND (date BETWEEN '{as.Date(input$od_c_real_date_start_1[[1]])}' AND DATE '{as.Date(input$od_c_real_date_start_1[[1]])}' + INTERVAL '{input$od_c_real_period-1} days') ",
+                                        "GROUP BY origin, destination) first1 INNER JOIN  ",
+                                        "(SELECT CAST(SUM(flow) AS float) AS sum_nf_second, origin, destination ",
+                                        "FROM {schema_name}.lsoa_flows ",
+                                        "WHERE gender IN ({gender_string}) AND age IN ({age_string}) AND (date BETWEEN '{as.Date(as.Date(input$od_c_real_date_start_2[[1]]))}' AND DATE '{as.Date(as.Date(input$od_c_real_date_start_2[[1]]))}' + INTERVAL '{input$od_c_real_period-1} days') ",
+                                        "GROUP BY origin, destination) second1 ON (first1.origin_first=second1.origin AND first1.destination_first=second1.destination)) j1 ",
+                                        "LEFT JOIN {schema_name}.all_points_wgs x1 ON (j1.origin=x1.area_code)) coord1 ",
+                                        "LEFT JOIN {schema_name}.all_points_wgs y1 ON (coord1.destination=y1.area_code) ",
+                                        "ORDER BY ABS(coord1.n_change) DESC;")))
+    
+    DT2_c <- na.omit(DT2_c, cols=c("origin", "destination", "orig_lon", "orig_lat", "dest_lon", "dest_lat"))
+    
   })
   
   
@@ -904,59 +823,54 @@ server <- function(input, output, session) {
         # Update progress bar.
         incProgress(1 / 4, message = "Importing data.")
         
-        # request static data based on specified parameters
-        data <- data_od_s_real() %>%
-          filter(complete.cases(.)) %>%
-          arrange(desc(n)) %>%
-          head(min(input$od_c_real_nrows, nrow(.)))
-        
-        domain <- c(0, max(data$n))
-        # rescale n value to make the scale for mapping consistent.
-        data$n <- (range01(data$n) + 0.01)
+        #request static data based on specified parameters
+        data <- data_od_s_real()[,head(.SD, round(input$od_c_real_nrows/100*nrow(data_od_s_real()))),]
         
         # Update progress bar.
-        incProgress(1 / 4, message = "Interpolating lines.")
+        incProgress(1 / 4, message = "Sampling for visualisation.")
         
-        # Interpolate lines based on origin and destination lat lons.
-        lines <- gcIntermediate(
-          as.matrix(data[, c("x_lon", "x_lat")]),
-          as.matrix(data[, c("y_lon", "y_lat")]),
-          n = 0,
-          addStartEnd = T,
-          sp = T
-        )
+        # Create domain for legend
+        domain <- c(min(data$sum_nf), max(data$sum_nf))
         
         # subset markers based on scale.
-        mrks <- area_lookup[.("lsoa")]
+        mrks <- dbGetQuery(con, glue("SELECT st_x(geometry) AS longitude, st_y(geometry) AS latitude, area_code FROM {schema_name}.all_points_wgs WHERE scale='lsoa';"))
         
         # Update progress bar.
         incProgress(1 / 4, message = "Building Map.")
         
         # Update static map with new lines data.
-        map <- leafletProxy("map_com_real", data = lines) %>%
+        map <- leafletProxy("map_com_real", data = data) %>%
           clearShapes() %>%
           clearControls() %>%
           clearMarkers() %>%
-          addPolylines(
-            color = colorNumeric("Spectral", data$n)(data$n),
-            weight = (data$n * 25), opacity = 0.4
-          ) %>%
-          addCircleMarkers(
+          clearFlows() %>%
+          addCircleMarkers( 
             lng = mrks$longitude,
             lat = mrks$latitude,
             layerId = mrks$area_code,
-            label = mrks$area_code,
-            radius = 1, weight = 1
+            label = mrks$area_code, 
+            radius = 1, weight = 0.1, color='grey'  
+          ) %>%
+          addFlows(lng0 = data$orig_lon,
+                   lat0 = data$orig_lat,
+                   lng1 = data$dest_lon,
+                   lat1 = data$dest_lat,
+                   flow = data$sum_nf, 
+                   color = colorNumeric("viridis", data$sum_nf)(data$sum_nf),
+                   dir = 1,
+                   maxThickness = 5,
+                   opacity = 1
           ) %>%
           leaflet::addLegend("bottomright",
                              layerId = "od_map_real_legend",
-                             pal = colorNumeric("Spectral", domain),
+                             pal = colorNumeric("viridis", domain),
                              values = domain,
                              title = "Journeys",
                              opacity = 0.8
           )
+        
         # Update progress bar.
-        incProgress(1 / 4, message = "Done.")
+        incProgress(1 / 4, message = "Done.") 
       })
     }
   })
@@ -971,93 +885,92 @@ server <- function(input, output, session) {
         
         # Update progress bar.
         incProgress(1 / 4, message = "Importing Map Data")
-        
-        data <- data_od_c_real() %>%
-          filter(complete.cases(.)) %>%
-          head(min(nrow(.), input$od_c_real_nrows))
-        
-        # Create the colour breaks
-        binpal <- colorBin("RdYlBu", bins = c(-100, -80, -60, -40, -20, 0, 20, 45, 60, 80, Inf))
+        #10
+        data <- data_od_c_real()[, head(.SD, round(input$od_c_real_nrows/100*nrow(data_od_c_real()))) ,]
         
         # Update progress bar.
-        incProgress(1 / 4, message = "Interpolating Lines")
+        incProgress(1 / 4, message = "Sampling for visualisation.")
         
-        # Interpolate lines based on origin and destination lat lons.
-        lines2 <- gcIntermediate(
-          as.matrix(data[, c("x_lon", "x_lat")]),
-          as.matrix(data[, c("y_lon", "y_lat")]),
-          n = 0,
-          addStartEnd = T,
-          sp = T
-        )
+        # Create the colour breaks
+        binpal <- colorBin("RdYlBu", bins = c(-100, -80, -60, -40, -20, 0, 20, 40, 60, 80, Inf), reverse=TRUE)
         
         # subset markers based on scale.
-        mrks <- area_lookup[.("lsoa")]
+        mrks <- dbGetQuery(con, glue("SELECT st_x(geometry) AS longitude, st_y(geometry) AS latitude, area_code FROM {schema_name}.all_points_wgs WHERE scale='lsoa';"))
         
+        # Update progress bar.
         incProgress(1 / 4, message = "Building Map.")
         
-        # Update comparative map with new lines data.
-        map_com <- leafletProxy("map_com_real", data = lines2) %>%
+        
+        map_com <- leafletProxy("map_com_real", data = data) %>%
           clearShapes() %>%
           clearControls() %>%
           clearMarkers() %>%
-          addPolylines(color = binpal(data$perc_change), weight = 1, opacity = 0.5) %>%
-          addCircleMarkers(
+          clearFlows() %>%
+          addCircleMarkers(   # 
             lng = mrks$longitude,
             lat = mrks$latitude,
             layerId = mrks$area_code,
             label = mrks$area_code,
-            radius = 1, weight = 1
+            radius = 1.5, weight = 0.1, color = "grey"
           ) %>%
           leaflet::addLegend("bottomright",
                              layerId = "od_map_legend",
-                             pal = colorBin("RdYlBu", bins = c(-100, -80, -60, -40, -20, 0, 20, 45, 60, 80, Inf)),
-                             values = c(-100, -80, -60, -40, -20, 0, 20, 45, 60, 80, 120),
-                             title = "% Change",
-                             labFormat = labelFormat(suffix = "%"),
+                             pal = colorBin("RdYlBu", bins = c(-100, -80, -60, -40, -20, 0, 20, 40, 60, 80, Inf), reverse=TRUE),
+                             values = data$perc_change,
+                             title = "Change (%)",
                              opacity = 0.8
-          )
+          ) %>%
+          addFlows(lng0 = data$orig_lon,
+                   lat0 = data$orig_lat,
+                   lng1 = data$dest_lon,
+                   lat1 = data$dest_lat,
+                   flow = data$n_change, 
+                   color = binpal(data$perc_change),
+                   dir = 1,
+                   maxThickness = 5,
+                   opacity =.5,
+                   popup = popupArgs(labels = "Change in Flow",
+                                     supValues = data.frame("PercChange" = data$perc_change, "OrigFlow" = data$n1, "CompFlow" = data$n2),
+                                     supLabels = c("Percentage Change", "Original Flow", "Comparison Flow"))
+          ) %>%
+          showGroup(input$od_c_real_scale)
       })
     }
   })
   
   
   # Add lines to the destination map. Where do people go to?
+  
+  
+  #need to sort this bit out!
+  ################################
   observeEvent(input$map_com_real_marker_click, {
     shinyjs::show("od_map_real_toggle", anim = T, animType = "slide")
     
-    data2a <- data_od_s_real() %>%
-      filter(origin == input$map_com_real_marker_click[[1]]) %>%
-      mutate(dir = "outbound", colour = "#ff0000")
+    data2a <- data_od_s_real()[origin==input$map_com_real_marker_click[[1]], `:=`(dir="outbound", colour="#ff0000"),]
     
-    data2b <- data_od_s_real() %>%
-      filter(destination == input$map_com_real_marker_click[[1]]) %>%
-      mutate(dir = "inbound", colour = "#00ff00")
+    data2b <- data_od_s_real()[destination == input$map_com_real_marker_click[[1]], `:=`(dir = "inbound", colour = "#00ff00"),]
     
-    data2 <- bind_rows(data2a, data2b)
+    data2 <- rbind(data2a, data2b)
     
     if (nrow(data2) > 0) {
-      data2$n <- (range01(data2$n) + 0.1) * 5
-      
-      # Interpolate lines based on origin and destination lat lons.
-      lines <- gcIntermediate(
-        as.matrix(data2[, c("x_lon", "x_lat")]),
-        as.matrix(data2[, c("y_lon", "y_lat")]),
-        n = 0,
-        addStartEnd = T,
-        sp = T
-      )
       
       # subset markers based on scale.
-      mrks <- area_lookup["lsoa"]
+      mrks <- dbGetQuery(con, glue("SELECT st_x(geometry) AS longitude, st_y(geometry) AS latitude, area_code FROM {schema_name}.all_points_wgs WHERE scale='lsoa';"))
       
       # Update od outbound map with new lines data.
       map <- leafletProxy("map_com_real", data = lines) %>%
         clearShapes() %>%
         clearMarkers() %>%
-        addPolylines(
-          group = "od_line_layer", color = data2$colour,
-          weight = 1 + (data2$n * 2), opacity = 0.3
+        addFlows(lng0 = data$orig_lon,
+                 lat0 = data$orig_lat,
+                 lng1 = data$dest_lon,
+                 lat1 = data$dest_lat,
+                 flow = data$sum_nf, 
+                 color = data$colour,
+                 dir = 1,
+                 maxThickness = 5,
+                 opacity = 1
         ) %>%
         addCircleMarkers(
           lng = mrks$longitude,
@@ -1074,24 +987,26 @@ server <- function(input, output, session) {
   output$od_c_real_tbl <- renderDataTable(
     
     if (input$od_c_real_version == "comp") {
-      data_od_c_real() %>%
-        transmute(origin, destination,
-                  T1_period = paste(input$od_c_real_date_start_1, "-", as.character(as.Date(input$od_c_real_date_start_1) %m+% months(as.numeric(input$od_c_real_period)) - 1)),
-                  T2_period = paste(as.Date(input$od_c_real_date_start_2), "-", as.character(as.Date(input$od_c_real_date_start_2) %m+% months(as.numeric(input$od_c_real_period)) - 1)),
-                  T1 = n.x, T2 = n.y, perc_change
-        ) %>%
-        left_join(area_lookup %>% select(area_code, "Origin Name" = msoa11nm), by = c("origin" = "area_code")) %>%
-        left_join(area_lookup %>% select(area_code, "Dest Name" = msoa11nm), by = c("destination" = "area_code")) %>%
-        select(Origin = origin, Dest = destination, "Origin Name", "Dest Name", T1_period, T2_period, T1, T2, perc_change)
+      
+      #make readable datatable
+      data_od_c_real()[, .(origin, 
+                           destination,
+                           T1_period = paste0(input$od_c_real_date_start_1, " +", input$od_c_real_period-1, 'd'),
+                           T2_period = paste0(as.Date(input$od_c_real_date_start_2), " +", input$od_c_real_period-1, 'd'),
+                           T1 = n1, 
+                           T2 = n2, 
+                           n_change,
+                           perc_change)]
+      
     } else if (input$od_c_real_version == "static") {
-      data_od_s_real() %>%
-        transmute(origin, destination,
-                  T1 = n,
-                  period = paste(input$od_c_real_date_start_1, "-", as.character(as.Date(input$od_c_real_date_start_1) %m+% months(as.numeric(input$od_c_real_period)) - 1))
-        ) %>%
-        left_join(area_lookup %>% select(area_code, "Origin Name" = msoa11nm), by = c("origin" = "area_code")) %>%
-        left_join(area_lookup %>% select(area_code, "Dest Name" = msoa11nm), by = c("destination" = "area_code")) %>%
-        select(Origin = origin, Dest = destination, "Origin Name", "Dest Name", period, T1)
+      
+      #make readable datatable
+      data_od_s_real()[, .(origin, 
+                           destination,
+                           T1 = sum_nf,
+                           period = paste(input$od_c_real_date_start_1, " +", input$od_c_real_period-1, 'd'))]
+      
+      
     }
     ,
     options = list(pageLength = 10, scrollX = T)
@@ -1106,24 +1021,25 @@ server <- function(input, output, session) {
     content = function(file) {
       fwrite(
         if (input$od_c_real_version == "comp") {
-          data_od_c_real() %>%
-            transmute(origin, destination,
-                      T1_period = paste(input$od_c_real_date_start_1, "-", as.character(as.Date(input$od_c_real_date_start_1) %m+% months(as.numeric(input$od_c_real_period)) - 1)),
-                      T2_period = paste(as.Date(input$od_c_real_date_start_2), "-", as.character(as.Date(input$od_c_real_date_start_2) %m+% months(as.numeric(input$od_c_real_period)) - 1)),
-                      T1 = n.x, T2 = n.y, perc_change
-            ) %>%
-            left_join(area_lookup %>% select(area_code, "Origin Name" = msoa11nm), by = c("origin" = "area_code")) %>%
-            left_join(area_lookup %>% select(area_code, "Dest Name" = msoa11nm), by = c("destination" = "area_code")) %>%
-            select(Origin = origin, Dest = destination, "Origin Name", "Dest Name", T1_period, T2_period, T1, T2, perc_change)
-        } else if (input$od_c_real_version == "static") {
-          data_od_s_real() %>%
-            transmute(origin, destination,
-                      T1 = n,
-                      period = paste(input$od_c_real_date_start_1, "-", as.character(as.Date(input$od_c_real_date_start_1) %m+% months(as.numeric(input$od_c_real_period)) - 1))
-            ) %>%
-            left_join(area_lookup %>% select(area_code, "Origin Name" = msoa11nm), by = c("origin" = "area_code")) %>%
-            left_join(area_lookup %>% select(area_code, "Dest Name" = msoa11nm), by = c("destination" = "area_code")) %>%
-            select(Origin = origin, Dest = destination, "Origin Name", "Dest Name", period, T1)
+          
+          #new data.table version
+          data_od_c_real()[,.(origin, 
+                              destination,
+                              T1_period = paste0(input$od_c_real_date_start_1, " +", input$od_c_real_period-1, 'd'),
+                              T2_period = paste0(as.Date(input$od_c_real_date_start_2), " +", input$od_c_real_period-1, 'd'),
+                              T1 = n1, 
+                              T2 = n2,
+                              n_change,
+                              perc_change)]
+          
+          } else if (input$od_c_real_version == "static") {
+          
+            #data table version
+            data_od_s_real()[,.(origin, 
+                                destination,
+                                T1 = sum_nf,
+                                period = paste(input$od_c_real_date_start_1, " +", input$od_c_real_period-1, 'd'))]
+            
         }, file
       )
     }
@@ -1137,20 +1053,12 @@ server <- function(input, output, session) {
   
   # eligibility Plot change graph
   plot_data3_real <- reactive({
-    data2a <- data_od_s_real() %>%
-      filter(origin == input$map_com_real_marker_click[[1]]) %>%
-      mutate(dir = "outbound", colour = "#ff0000") %>%
-      arrange(desc(n)) %>%
-      head(10)
+    data2a <- data_od_s_real()[origin == input$map_com_real_marker_click[[1]], `:=`(dir = "outbound", colour = "#ff0000"),][order(-sum_nf)][,head(.SD,10),]
   })
   
   # eligibility Plot change graph
   plot_data4_real <- reactive({
-    data2b <- data_od_s_real() %>%
-      filter(destination == input$map_com_real_marker_click[[1]]) %>%
-      mutate(dir = "inbound", colour = "#00ff00") %>%
-      arrange(desc(n)) %>%
-      head(10)
+    data2b <- data_od_s_real()[destination == input$map_com_real_marker_click[[1]], `:=`(dir = "inbound", colour = "#00ff00"),][order(-sum_nf)][,head(.SD,10),]
   })
   
   output$inbound_bokeh_plot_real <- renderRbokeh({
@@ -1162,7 +1070,7 @@ server <- function(input, output, session) {
     ) %>%
       ly_bar(
         x = as.character(origin),
-        y = n,
+        y = sum_nf,
         fill_color = "#ff0000"
       ) %>%
       theme_axis("x", major_label_orientation = 45)
@@ -1177,7 +1085,7 @@ server <- function(input, output, session) {
     ) %>%
       ly_bar(
         x = as.character(destination),
-        y = n,
+        y = sum_nf,
         fill_color = "#00ff00"
       ) %>%
       theme_axis("x", major_label_orientation = 45)
@@ -1217,52 +1125,10 @@ server <- function(input, output, session) {
     shinyjs::toggle("ac_date")
   })
   
-  # Import the accessibility data
-  ac_dt <- fread("data/accessibility/access_data_tues.csv", data.table = F) %>%
-    filter(complete.cases(.)) %>%
-    mutate(mean_min_time = round(ceiling(mean_min_time / 60)))
-  
-  # Import the output areas shape file.
-  oa <- readShapePoly("data/spatial_data/oa_4326.shp", delete_null_obj = T)
-  oa@data <- oa@data[, c("objectid", "oa11cd")]
-  oa@data$oa11cd <- as.character(oa@data$oa11cd)
-  
-  # Import Accessibility POI Shape files
-  
-  clinics <- readShapePoints("data/POIs/Clinics/Clinics.shp")
-  gps <- readShapePoints("data/POIs/GPs/GPs.shp")
-  hsp <- readShapePoints("data/POIs/Hospitals/Hospitals.shp")
-  ret <- readShapePoints("data/POIs/RetailCentres/retail_centres_2015_4326_x.shp")
-  sm <- readShapePoints("data/POIs/Supermarkets/2016/Supermarkets_2016_4326.shp")
-  sm_s <- sm[sm@data$size_band == "< 3,013 ft2 (280m2)", ]
-  sm_m <- sm[sm@data$size_band == "3,013 < 15,069 ft2 (280 < 1,400 m2)", ]
-  sm_l <- sm[sm@data$size_band == "15,069 < 30,138 ft2 (1,400 < 2,800 m2)", ]
-  sm_v <- sm[sm@data$size_band == "30,138 ft2 > (2,800 m2)", ]
-  ts <- readShapePoints("data/POIs/Railway Stations/2016/Railway_Stations_2016.shp")
-  rm(sm)
-  
   output$ac_map <- renderLeaflet({
     leaflet() %>%
       setView(lng = -1.891587, lat = 52.484689, zoom = 10) %>%
-      addProviderTiles(providers$CartoDB.Positron) %>%
-      
-      # Example area_code to add datashine layers into the App.
-      
-      # addTiles(group = "Vulnerability", urlTemplate = "https://maps.cdrc.ac.uk/tiles/shine_urbanmask_dark2/{z}/{x}/{y}.png",
-      #          option=tileOptions(tms = F, continuousWorld=T, opacity = 1)) %>%
-      
-      
-      # Accessibility Amenity Circle Markers
-      addCircleMarkers(data = clinics, group = "Clinic", stroke = T, color = "black", weight = 1, fillColor = "#e41a1c", radius = 7, fillOpacity = .8) %>%
-      addCircleMarkers(data = gps, group = "GP", stroke = T, color = "black", weight = 1, fillColor = "#377eb8", radius = 7, fillOpacity = .8) %>%
-      addCircleMarkers(data = hsp, group = "Hospital", stroke = T, color = "black", weight = 1, fillColor = "#4daf4a", radius = 7, fillOpacity = .8) %>%
-      addCircleMarkers(data = sm_s, group = "Supermarket (Small)", stroke = T, color = "black", weight = 1, fillColor = "#984ea3", radius = 7, fillOpacity = .8) %>%
-      addCircleMarkers(data = sm_m, group = "Supermarket (Medium)", stroke = T, color = "black", weight = 1, fillColor = "#ff7f00", radius = 7, fillOpacity = .8) %>%
-      addCircleMarkers(data = sm_l, group = "Supermarket (Large)", stroke = T, color = "black", weight = 1, fillColor = "#ffff33", radius = 7, fillOpacity = .8) %>%
-      addCircleMarkers(data = ret, group = "Retail Centre", stroke = T, color = "black", weight = 1, fillColor = "#ffff33", radius = 7, fillOpacity = .8) %>%
-      addCircleMarkers(data = sm_v, group = "Supermarket (Very Large)", stroke = T, color = "black", weight = 1, fillColor = "#a65628", radius = 7, fillOpacity = .8) %>%
-      addCircleMarkers(data = ts, group = "Train Station", stroke = T, color = "black", weight = 1, fillColor = "#f781bf", radius = 7, fillOpacity = .8) %>%
-      hideGroup(c("Clinic", "GP", "Supermarket (Small)", "Supermarket (Medium)", "Supermarket (Large)", "Supermarket (Very Large)", "Train Station", "Retail Centre"))
+      addProviderTiles(providers$CartoDB.Positron)
   })
   
   
@@ -1288,34 +1154,47 @@ server <- function(input, output, session) {
   
   # Create Reactive table for static accessibility
   s_data <- reactive({
-    data <- oa@data %>%
-      left_join(ac_dt %>%
-                  filter(date == input$ac_date, type == input$ac_type), by = c("oa11cd" = "origin"))
+    
+    ac_dt <- setDT(dbGetQuery(con, glue("SELECT mean_min_time, origin AS area_code FROM {schema_name}.access_data WHERE date='{input$ac_date}' AND type='{input$ac_type}';")))
+    
+    ac_dt
+
   })
   
   # Create Reactive table for comparative accessibility
   s_data_comp <- reactive({
-    data <- oa@data %>%
-      left_join(
-        ac_dt %>%
-          filter(date == input$ac_date_comp[[1]], type == input$ac_type) %>%
-          select(origin, type, mean_min_time_start = mean_min_time) %>%
-          inner_join(
-            ac_dt %>% filter(date == input$ac_date_comp[[2]], type == input$ac_type) %>% select(origin, type, mean_min_time_end = mean_min_time),
-            by = c("origin", "type")
-          ) %>%
-          mutate(mean_min_time = mean_min_time_end - mean_min_time_start),
-        by = c("oa11cd" = "origin")
-      )
+    
+    ac_dt <- setDT(dbGetQuery(con, glue("SELECT j1.start_mean_min_time-acc2.mean_min_time AS change_min_time, j1.start_mean_min_time AS mean_min_time_start, acc2.mean_min_time AS mean_min_time_end, j1.origin AS area_code FROM
+                                    (SELECT acc1.mean_min_time AS start_mean_min_time, acc1.origin FROM
+                                        {schema_name}.access_data acc1 WHERE date='{as.Date(input$ac_date_comp[[1]])}' AND type='{input$ac_type}') j1 
+                                        LEFT JOIN {schema_name}.access_data acc2 ON (j1.origin=acc2.origin) 
+                                        WHERE date='{as.Date(input$ac_date_comp[[2]])}' AND type='{input$ac_type}';")))
+    
+    ac_dt <- na.omit(ac_dt)
+    
   })
   
   output$ac_tbl <- renderDataTable(
     if (input$ac_c_version == "comp") {
-      s_data_comp() %>%
-        transmute(oa11cd, type, T1_date = input$ac_date_comp[[1]], T2_date = input$ac_date_comp[[2]], T1_time = mean_min_time_start, T2_time = mean_min_time_end, Change = mean_min_time)
-    } else if (input$ac_c_version == "static") {
-      s_data() %>%
-        select(oa11cd, type, T1_date = date, T1_time = mean_min_time)
+      #data.table version
+      s_data_comp()[,
+                    .(area_code, 
+                      type, 
+                      T1_date = input$ac_date_comp[[1]], 
+                      T2_date = input$ac_date_comp[[2]], 
+                      T1_time = mean_min_time_start, 
+                      T2_time = mean_min_time_end, 
+                      Change = change_min_time)]
+      
+      } else if (input$ac_c_version == "static") {
+      
+        #data.table version
+        s_data()[,
+                 .(area_code, 
+                   type, 
+                   T1_date = as.Date(input$ac_date), 
+                   T1_time = mean_min_time)]
+        
     }
     ,
     options = list(pageLength = 10, scrollX = T)
@@ -1329,11 +1208,24 @@ server <- function(input, output, session) {
     content = function(file) {
       fwrite(
         if (input$ac_c_version == "comp") {
-          s_data_comp() %>%
-            transmute(oa11cd, type, T1_date = input$ac_date_comp[[1]], T2_date = input$ac_date_comp[[2]], T1_time = mean_min_time_start, T2_time = mean_min_time_end, Change = mean_min_time)
-        } else if (input$ac_c_version == "static") {
-          s_data() %>%
-            select(oa11cd, type, T1_date = date, T1_time = mean_min_time)
+          #data.table version
+          s_data_comp()[,
+                        .(area_code, 
+                          type, 
+                          T1_date = input$ac_date_comp[[1]], 
+                          T2_date = input$ac_date_comp[[2]], 
+                          T1_time = mean_min_time_start, 
+                          T2_time = mean_min_time_end, 
+                          Change = change_min_time)]
+          } else if (input$ac_c_version == "static") {
+            
+            #data.table version
+            s_data()[,
+                     .(area_code, 
+                       type, 
+                       T1_date = as.Date(input$ac_date), 
+                       T1_time = mean_min_time)]
+            
         }, file
       )
     }
@@ -1341,68 +1233,141 @@ server <- function(input, output, session) {
   
   # Accessibility Map update
   observeEvent(input$ac_c_s_update, {
-    oa_cp <- oa
+    
+    oa_cp <- st_read(dsn=con, layer=c(schema_name, "oa_boundaries"))
+    
+    if(input$ac_type=="Clinic"){
+      markers <- st_read(dsn=con, layer=c(schema_name, "clinics"))
+      mark_col <- "#e41a1c"
+      markers$poi_name <- markers$Organisa_4
+    }else if(input$ac_type=="GP"){
+      markers <- st_read(dsn=con, layer=c(schema_name, "gps"))
+      mark_col <- "#377eb8"
+      markers$poi_name <- markers$Organisa_4
+    }else if(input$ac_type=="Hospital"){
+      markers <- st_read(dsn=con, layer=c(schema_name, "hospitals"))
+      mark_col <- "#4daf4a"
+      markers$poi_name <- markers$Organisa_4
+    }else if(input$ac_type=="Retail Centre"){
+      markers <- st_read(dsn=con, layer=c(schema_name, "retail_centres"))
+      mark_col <- "#ffff33"
+      markers$poi_name <- markers$Name
+    }else if(input$ac_type=="Train Station"){
+      markers <- st_read(dsn=con, layer=c(schema_name, "rail_stations"))
+      mark_col <- "#f781bf"
+      markers$poi_name <- markers$Name
+    }else if(input$ac_type=="Supermarket (Small)"){
+      markers <- st_read(dsn=con, layer=c(schema_name, "sm_small"))
+      mark_col <- "#984ea3"
+      markers$poi_name <- markers$retailer
+    }else if(input$ac_type=="Supermarket (Medium)"){
+      markers <- st_read(dsn=con, layer=c(schema_name, "sm_medium"))
+      mark_col <- "#ff7f00"
+      markers$poi_name <- markers$retailer
+    }else if(input$ac_type=="Supermarket (Large)"){
+      markers <- st_read(dsn=con, layer=c(schema_name, "sm_large"))
+      mark_col <- "#ffff33"
+    }else if(input$ac_type=="Supermarket (Very Large)"){
+      markers <- st_read(dsn=con, layer=c(schema_name, "sm_very_large"))
+      mark_col <- "#a65628"
+      markers$poi_name <- markers$retailer
+    }
     
     if (input$ac_c_version == "static") {
+      
       palette <- "YlOrRd"
       reverse <- F
-      oa_cp@data <- oa_cp@data %>% left_join(s_data())
-      domain <- c(1, max(abs(oa_cp@data$mean_min_time)))
+      oa_cp <- oa_cp %>% 
+        left_join(s_data(), by = c("area_code"))
+      
+      domain <- c(1, max(abs(oa_cp$mean_min_time),na.rm=TRUE))
+      
+      legend_title <- "Travel Time (mins)"
+      
+      
     } else if (input$ac_c_version == "comp") {
       palette <- "RdYlGn"
       reverse <- T
-      oa_cp@data <- oa_cp@data %>% left_join(s_data_comp())
-      domain <- c((-1 * max(abs(oa_cp@data$mean_min_time))), max(abs(oa_cp@data$mean_min_time)))
+      oa_cp <- oa_cp %>% 
+        left_join(s_data_comp(), by = c("area_code"))
+      
+      #change name to simplify code
+      oa_cp$mean_min_time <- oa_cp$change_min_time
+      
+      domain <- c((-1 * max(abs(oa_cp$mean_min_time),na.rm=TRUE)), max(abs(oa_cp$mean_min_time),na.rm=TRUE))
+      
+      legend_title <- "Change in Travel Time (mins)"
     }
     
+    
+    #make the palette
+    pal <- colorNumeric(palette, domain, reverse = reverse)
+    
+    #generate random numbers to split up the dataframe
+    #you can't display over 3,000 polygons in a single item so split into 4
+    oa_cp$split_num <- sample(4, size = nrow(oa_cp), replace = TRUE)
+    
+    
+    #generate the map
     leafletProxy("ac_map", deferUntilFlush = F) %>%
+      clearControls() %>%
       clearShapes() %>%
-      # Update Accessibility
-      hideGroup(c(
-        "Clinic", "GP", "Hospital", "Supermarket (Small)",
-        "Supermarket (Medium)", "Supermarket (Large)", "Supermarket (Very Large)", "Train Station"
-      )) %>%
+      clearMarkers() %>%
       addPolygons(
-        data = oa_cp[1:2500, ],
+        data = oa_cp[oa_cp$split_num==1, ],
         fillOpacity = 0.7,
         smoothFactor = 0,
         color = ~colorNumeric(palette, domain, reverse = reverse)(mean_min_time),
         weight = .5,
-        label = ~htmlEscape(paste0(oa11cd, " : ", mean_min_time, " mins.")),
-        layerId = ~oa11cd,
-        highlightOptions = highlightOptions(color = "black", weight = 3, bringToFront = F)
+        label = ~htmlEscape(paste0(oa_cp$area_code, " : ", mean_min_time, " mins.")),  
+        layerId = ~area_code,
+        highlightOptions = highlightOptions(color = "black", weight = 2)
       ) %>%
       addPolygons(
-        data = oa_cp[2501:5000, ],
+        data = oa_cp[oa_cp$split_num==2, ],
         fillOpacity = 0.7,
         smoothFactor = 0,
         color = ~colorNumeric(palette, domain, reverse = reverse)(mean_min_time),
         weight = .5,
-        label = ~htmlEscape(paste0(oa11cd, " : ", mean_min_time, " mins.")),
-        layerId = ~oa11cd,
-        highlightOptions = highlightOptions(color = "black", weight = 3, bringToFront = F)
+        label = ~htmlEscape(paste0(oa_cp$area_code, " : ", mean_min_time, " mins.")),
+        layerId = ~area_code,
+        highlightOptions = highlightOptions(color = "black", weight = 2)
       ) %>%
       addPolygons(
-        data = oa_cp[5001:7500, ],
+        data = oa_cp[oa_cp$split_num==3, ],
         fillOpacity = 0.7,
         smoothFactor = 0,
         color = ~colorNumeric(palette, domain, reverse = reverse)(mean_min_time),
         weight = .5,
-        label = ~htmlEscape(paste0(oa11cd, " : ", mean_min_time, " mins.")),
-        layerId = ~oa11cd,
-        highlightOptions = highlightOptions(color = "black", weight = 3, bringToFront = F)
+        label = ~htmlEscape(paste0(oa_cp$area_code, " : ", mean_min_time, " mins.")),
+        layerId = ~area_code,
+        highlightOptions = highlightOptions(color = "black", weight = 2)
       ) %>%
       addPolygons(
-        data = oa_cp[7501:nrow(oa_cp), ],
+        data = oa_cp[oa_cp$split_num==4, ],
         fillOpacity = 0.7,
         smoothFactor = 0,
         color = ~colorNumeric(palette, domain, reverse = reverse)(mean_min_time),
         weight = .5,
-        label = ~htmlEscape(paste0(oa11cd, " : ", mean_min_time, " mins.")),
-        layerId = ~oa11cd,
-        highlightOptions = highlightOptions(color = "black", weight = 3, bringToFront = F)
+        label = ~htmlEscape(paste0(oa_cp$area_code, " : ", mean_min_time, " mins.")),
+        layerId = ~area_code,
+        highlightOptions = highlightOptions(color = "black", weight = 2)
       ) %>%
-      showGroup(input$ac_type)
+      addCircleMarkers(data = markers, 
+                       stroke = T, 
+                       color = "black", 
+                       weight = 1, 
+                       fillColor = mark_col, 
+                       radius = 7, 
+                       fillOpacity = .8,
+                       label = ~poi_name
+      ) %>%
+      leaflet::addLegend(
+        position = "bottomright",
+        title = legend_title,
+        pal = pal,
+        values = domain
+      )
   })
   
   # Update Accessibility Legend.
