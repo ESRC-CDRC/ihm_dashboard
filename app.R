@@ -23,6 +23,7 @@ library(shinyjs) # Additional java script functionality
 library(forcats) # Helper functions for working with factors
 library(rintrojs) # Javascript based introduction to app
 library(DT) # package for rendering data tables
+library(sf) # package for dealing with spatial data
 
 #here are the SQL/connection packages
 library(RPostgreSQL)
@@ -32,9 +33,10 @@ library(glue)
 #load in the env variables
 db_name=Sys.getenv("DBNAME")
 host_name=Sys.getenv("HOSTNAME")
-user_name=Sys.getenv("AGGDASHUSERNAME")
-password_name=Sys.getenv("AGGDASHPASSNAME")
+user_name=Sys.getenv("USERNAME")
+password_name=Sys.getenv("PASSNAME")
 
+schema_name <- "public_dashboard"
 
 #set up a connection
 con <- dbConnect(dbDriver("PostgreSQL"), 
@@ -43,8 +45,13 @@ con <- dbConnect(dbDriver("PostgreSQL"),
                  user = user_name, 
                  password = password_name)
 
+
 #actual function part of app begins
 ui <- function(request) {
+  
+  
+  
+  
   dashboardPage(
     dashboardHeader(title = "Dashboard"),
     ## Sidebar content
@@ -85,7 +92,7 @@ ui <- function(request) {
                   circle = TRUE, status = "danger", icon = icon("gear"), width = "200px",
                   selectInput(
                     inputId = "dygraph_statistic", label = "Statistic",
-                    choices = list("Passengers" = "passenger", "Journeys" = "journeys", "Journeys per person" = "journeys_pp")
+                    choices = list("Passengers" = "passengers", "Journeys" = "journeys", "Journeys per person" = "journeys_pp")
                   ),
                   selectInput(
                     inputId = "dygraph_type", label = "Passenger Type",
@@ -96,7 +103,7 @@ ui <- function(request) {
                   ),
                   selectInput(
                     inputId = "dygraph_time_resolution", label = "Resolution",
-                    choices = list("1 Month" = "month", "Quarter" = "quarter")
+                    choices = list("1 Month" = "month", "Quarter" = "quarter", "Year" = "year")
                   ),
                   tooltip = tooltipOptions(title = "Click to see inputs !")
                 )
@@ -126,16 +133,9 @@ ui <- function(request) {
               ),
               column(
                 12,
-                pickerInput(
-                  inputId = "od_c_real_period",
-                  label = "Period",
-                  choices = list("1 Month" = 1, "2 Months" = 2, "3 months" = 3),
-                  selected = 6,
-                  options = list(
-                    `actions-box` = T,
-                    size = 10
-                  ),
-                  multiple = F
+                sliderInput("od_c_real_period",
+                            label = "Period in months",
+                            min = 1, max = 24, value = c(1, 24)
                 )
               )
             ),
@@ -241,7 +241,7 @@ ui <- function(request) {
                     "LSOA" = "lsoa",
                     "MSOA" = "msoa"
                   ),
-                  selected = "msoa",
+                  selected = "lsoa",
                   options = list(
                     `actions-box` = T,
                     size = 10
@@ -249,23 +249,12 @@ ui <- function(request) {
                   multiple = F
                 ))
               ),
-              column(
+              column( 
                 12,
-                pickerInput(
-                  inputId = "od_c_real_nrows",
-                  label = "Maximum number of flows",
-                  width = "100%",
-                  choices = list(
-                    "100" = 100, "1,000" = 1000, "5,000" = 5000,
-                    "10,000" = 10000, "All" = Inf
-                  ),
-                  selected = 1000,
-                  options = list(
-                    `actions-box` = T,
-                    size = 10
-                  ),
-                  multiple = F
-                )
+                numericInput(inputId= "od_c_real_nrows", 
+                             label = 'Top % of flows', 
+                             value = '1', min = 0, max = 100, step = 1,
+                             width = '100%')
               ),
               column(
                 12,
@@ -618,8 +607,8 @@ server <- function(input, output, session) {
   
   dygraph_data_1 <- reactive({
     
-    data <- dbGetQuery(con, glue("SELECT gender, SUM({input$dygraph_statistic}) AS value, CAST(DATE_TRUNC('{input$dygraph_time_resolution}', date) AS DATE) AS date FROM {schema_name}.dygraph_gender ",
-                                 "WHERE type='{input$dygraph_type}' GROUP BY gender, CAST(DATE_TRUNC('{input$dygraph_time_resolution}', date) AS DATE) AS date;"))
+    data <- setDT(dbGetQuery(con, glue("SELECT gender, SUM({input$dygraph_statistic}) AS value, CAST(DATE_TRUNC('{input$dygraph_time_resolution}', date) AS DATE) AS date FROM {schema_name}.dygraph_gender ",
+                                 "WHERE type='{input$dygraph_type}' GROUP BY gender, CAST(DATE_TRUNC('{input$dygraph_time_resolution}', date) AS DATE);")))
     
     data <- dcast(data, date ~ gender, value.var = c("value"), fun.aggregate = sum)
     
@@ -629,8 +618,8 @@ server <- function(input, output, session) {
   
   dygraph_data_2 <- reactive({
     
-    data <- dbGetQuery(con, glue("SELECT age, SUM({input$dygraph_statistic}) AS value, CAST(DATE_TRUNC('{input$dygraph_time_resolution}', date) AS DATE) AS date FROM {schema_name}.dygraph_age ",
-                                 "WHERE type='{input$dygraph_type}' GROUP BY age, CAST(DATE_TRUNC('{input$dygraph_time_resolution}', date) AS DATE) AS date;"))
+    data <- setDT(dbGetQuery(con, glue("SELECT age, SUM({input$dygraph_statistic}) AS value, CAST(DATE_TRUNC('{input$dygraph_time_resolution}', date) AS DATE) AS date FROM {schema_name}.dygraph_age ",
+                                 "WHERE type='{input$dygraph_type}' GROUP BY age, CAST(DATE_TRUNC('{input$dygraph_time_resolution}', date) AS DATE);")))
     
     data <- dcast(data, date ~ age, value.var = c("value"), fun.aggregate = sum)
     
@@ -760,17 +749,18 @@ server <- function(input, output, session) {
   
   data_od_s_real <- reactive({
     
-    #get parameters
-    age_string <- toString(sprintf("'%s'", input$od_c_real_demographics[grep("^[0-9]+$",input$od_c_real_demographics)]))
+    #no demog_params in agg_dash parameters
+    #age_string <- toString(sprintf("'%s'", input$od_c_real_demographics[grep("^[0-9]+$",input$od_c_real_demographics)]))
     
-    gender_string <- toString(sprintf("'%s'", input$od_c_real_demographics[grep("^[A-Z]+$",input$od_c_real_demographics)]))
+    #gender_string <- toString(sprintf("'%s'", input$od_c_real_demographics[grep("^[A-Z]+$",input$od_c_real_demographics)]))
+    
     
     #do the main query
     DT2_s <- setDT(dbGetQuery(con, glue("SELECT j1.sum_nf, j1.origin, j1.destination, j1.orig_lat, j1.orig_lon, st_x(y1.geometry) AS dest_lon, st_y(y1.geometry) AS dest_lat ",
                                         "FROM (SELECT flow1.sum_nf, flow1.origin, flow1.destination, st_x(x1.geometry) AS orig_lon, st_y(x1.geometry) AS orig_lat ",
                                         "FROM (SELECT SUM(flow) AS sum_nf, origin, destination ",
                                         "FROM {schema_name}.lsoa_flows ",
-                                        "WHERE gender IN ({gender_string}) AND age IN ({age_string}) AND (date BETWEEN '{as.Date(input$od_c_real_date_start_1[[1]])}' AND DATE '{as.Date(input$od_c_real_date_start_1[[1]])}' + INTERVAL '{input$od_c_real_period-1} days') ",
+                                        "WHERE (date BETWEEN '{as.Date(input$od_c_real_date_start_1[[1]])}' AND DATE '{as.Date(input$od_c_real_date_start_1[[1]])}' + INTERVAL '{as.numeric(input$od_c_real_period)-1} months') ",
                                         "GROUP BY origin, destination) flow1 ",
                                         "LEFT JOIN {schema_name}.all_points_wgs x1 ON (flow1.origin=x1.area_code)) j1 ",
                                         "LEFT JOIN {schema_name}.all_points_wgs y1 ON (j1.destination=y1.area_code) ",
@@ -778,16 +768,15 @@ server <- function(input, output, session) {
     
     DT2_s <- na.omit(DT2_s, cols=c("origin", "destination", "orig_lon", "orig_lat", "dest_lon", "dest_lat"))
     
-    DT2_s
   })
   
   
   data_od_c_real <- reactive({
     
-    #get parameters
-    age_string <- toString(sprintf("'%s'", input$od_c_real_demographics[grep("^[0-9]+$",input$od_c_real_demographics)]))
+    #no demogs in agg_dash get parameters
+    #age_string <- toString(sprintf("'%s'", input$od_c_real_demographics[grep("^[0-9]+$",input$od_c_real_demographics)]))
     
-    gender_string <- toString(sprintf("'%s'", input$od_c_real_demographics[grep("^[A-Z]+$",input$od_c_real_demographics)]))
+    #gender_string <- toString(sprintf("'%s'", input$od_c_real_demographics[grep("^[A-Z]+$",input$od_c_real_demographics)]))
     
     #do the main query
     
@@ -795,11 +784,11 @@ server <- function(input, output, session) {
                                         "(SELECT ROUND(((j1.sum_nf_second-j1.sum_nf_first)/j1.sum_nf_first)*100.0) AS perc_change, j1.sum_nf_second-j1.sum_nf_first AS n_change, j1.sum_nf_second, j1.sum_nf_first, j1.origin_first AS origin, j1.destination_first AS destination, st_x(x1.geometry) AS orig_lon, st_y(x1.geometry) AS orig_lat FROM ",
                                         "((SELECT CAST(SUM(flow) AS float) AS sum_nf_first, origin AS origin_first, destination AS destination_first ",
                                         "FROM {schema_name}.lsoa_flows  ",
-                                        "WHERE gender IN ({gender_string}) AND age IN ({age_string}) AND (date BETWEEN '{as.Date(input$od_c_real_date_start_1[[1]])}' AND DATE '{as.Date(input$od_c_real_date_start_1[[1]])}' + INTERVAL '{input$od_c_real_period-1} days') ",
+                                        "WHERE (date BETWEEN '{as.Date(input$od_c_real_date_start_1[[1]])}' AND DATE '{as.Date(input$od_c_real_date_start_1[[1]])}' + INTERVAL '{as.numeric(input$od_c_real_period)-1} months') ",
                                         "GROUP BY origin, destination) first1 INNER JOIN  ",
                                         "(SELECT CAST(SUM(flow) AS float) AS sum_nf_second, origin, destination ",
                                         "FROM {schema_name}.lsoa_flows ",
-                                        "WHERE gender IN ({gender_string}) AND age IN ({age_string}) AND (date BETWEEN '{as.Date(as.Date(input$od_c_real_date_start_2[[1]]))}' AND DATE '{as.Date(as.Date(input$od_c_real_date_start_2[[1]]))}' + INTERVAL '{input$od_c_real_period-1} days') ",
+                                        "WHERE AND (date BETWEEN '{as.Date(as.Date(input$od_c_real_date_start_2[[1]]))}' AND DATE '{as.Date(as.Date(input$od_c_real_date_start_2[[1]]))}' + INTERVAL '{as.numeric(input$od_c_real_period)-1} months') ",
                                         "GROUP BY origin, destination) second1 ON (first1.origin_first=second1.origin AND first1.destination_first=second1.destination)) j1 ",
                                         "LEFT JOIN {schema_name}.all_points_wgs x1 ON (j1.origin=x1.area_code)) coord1 ",
                                         "LEFT JOIN {schema_name}.all_points_wgs y1 ON (coord1.destination=y1.area_code) ",
@@ -807,6 +796,7 @@ server <- function(input, output, session) {
     
     DT2_c <- na.omit(DT2_c, cols=c("origin", "destination", "orig_lon", "orig_lat", "dest_lon", "dest_lat"))
     
+    print("comp data load success!")
   })
   
   
@@ -814,6 +804,8 @@ server <- function(input, output, session) {
   
   observeEvent(input$od_c_real_s_update, {
     shinyjs::hide("od_map_real_toggle", anim = T, animType = "slide")
+    
+    print("test working!")
     
     
     if (input$od_c_real_version == "static") {
@@ -828,6 +820,7 @@ server <- function(input, output, session) {
         
         # Update progress bar.
         incProgress(1 / 4, message = "Sampling for visualisation.")
+        
         
         # Create domain for legend
         domain <- c(min(data$sum_nf), max(data$sum_nf))
@@ -849,7 +842,7 @@ server <- function(input, output, session) {
             lat = mrks$latitude,
             layerId = mrks$area_code,
             label = mrks$area_code, 
-            radius = 1, weight = 0.1, color='grey'  
+            radius = 3, weight = 0.1, color='black'  
           ) %>%
           addFlows(lng0 = data$orig_lon,
                    lat0 = data$orig_lat,
@@ -877,8 +870,9 @@ server <- function(input, output, session) {
   
   # Update map to reflect new criteria.
   observeEvent(input$od_c_real_s_update, {
-    if (input$od_c_real_version == "comp") {
+    if(input$od_c_real_version=="comp"){
       shinyjs::hide("od_map_real_toggle", anim = T, animType = "slide")
+      
       
       # Create progress bar.
       withProgress(message = "Processing Request", value = 0, {
@@ -947,19 +941,26 @@ server <- function(input, output, session) {
   observeEvent(input$map_com_real_marker_click, {
     shinyjs::show("od_map_real_toggle", anim = T, animType = "slide")
     
-    data2a <- data_od_s_real()[origin==input$map_com_real_marker_click[[1]], `:=`(dir="outbound", colour="#ff0000"),]
+    print(glue("input click on {input$map_com_real_marker_click[[1]]}"))
     
-    data2b <- data_od_s_real()[destination == input$map_com_real_marker_click[[1]], `:=`(dir = "inbound", colour = "#00ff00"),]
+    data2a <- data_od_s_real()[origin==input$map_com_real_marker_click[[1]], ,][,`:=`(dir="outbound", colour="#ff0000"),]
+    
+    print("dat 1")
+    data2b <- data_od_s_real()[destination==input$map_com_real_marker_click[[1]], ,][,`:=`(dir = "inbound", colour = "#00ff00"),]
     
     data2 <- rbind(data2a, data2b)
+    
+    print("successfully bound data")
     
     if (nrow(data2) > 0) {
       
       # subset markers based on scale.
       mrks <- dbGetQuery(con, glue("SELECT st_x(geometry) AS longitude, st_y(geometry) AS latitude, area_code FROM {schema_name}.all_points_wgs WHERE scale='lsoa';"))
       
+      print("got marks")
+      
       # Update od outbound map with new lines data.
-      map <- leafletProxy("map_com_real", data = lines) %>%
+      map <- leafletProxy("map_com_real", data = data2) %>%
         clearShapes() %>%
         clearMarkers() %>%
         addFlows(lng0 = data$orig_lon,
@@ -984,15 +985,15 @@ server <- function(input, output, session) {
   
   
   
-  output$od_c_real_tbl <- renderDataTable(
+  output$od_c_real_tbl <- renderDT(
     
     if (input$od_c_real_version == "comp") {
       
       #make readable datatable
       data_od_c_real()[, .(origin, 
                            destination,
-                           T1_period = paste0(input$od_c_real_date_start_1, " +", input$od_c_real_period-1, 'd'),
-                           T2_period = paste0(as.Date(input$od_c_real_date_start_2), " +", input$od_c_real_period-1, 'd'),
+                           T1_period = paste0(input$od_c_real_date_start_1, " +", as.numeric(input$od_c_real_period)-1, 'm'),
+                           T2_period = paste0(as.Date(input$od_c_real_date_start_2), " +", as.numeric(input$od_c_real_period)-1, 'm'),
                            T1 = n1, 
                            T2 = n2, 
                            n_change,
@@ -1004,7 +1005,7 @@ server <- function(input, output, session) {
       data_od_s_real()[, .(origin, 
                            destination,
                            T1 = sum_nf,
-                           period = paste(input$od_c_real_date_start_1, " +", input$od_c_real_period-1, 'd'))]
+                           period = paste(input$od_c_real_date_start_1, " +", as.numeric(input$od_c_real_period)-1, 'm'))]
       
       
     }
@@ -1053,12 +1054,14 @@ server <- function(input, output, session) {
   
   # eligibility Plot change graph
   plot_data3_real <- reactive({
-    data2a <- data_od_s_real()[origin == input$map_com_real_marker_click[[1]], `:=`(dir = "outbound", colour = "#ff0000"),][order(-sum_nf)][,head(.SD,10),]
+    data2a <- data_od_s_real()
+    data2a <- data2a[origin == input$map_com_real_marker_click[[1]], ,][,`:=`(dir = "outbound", colour = "#ff0000"),][order(-sum_nf)][,head(.SD,10),]
   })
   
   # eligibility Plot change graph
   plot_data4_real <- reactive({
-    data2b <- data_od_s_real()[destination == input$map_com_real_marker_click[[1]], `:=`(dir = "inbound", colour = "#00ff00"),][order(-sum_nf)][,head(.SD,10),]
+    data2b <- data_od_s_real()
+    data2b <- data2b[destination == input$map_com_real_marker_click[[1]], ,][,`:=`(dir = "inbound", colour = "#00ff00"),][order(-sum_nf)][,head(.SD,10),]
   })
   
   output$inbound_bokeh_plot_real <- renderRbokeh({
@@ -1174,7 +1177,7 @@ server <- function(input, output, session) {
     
   })
   
-  output$ac_tbl <- renderDataTable(
+  output$ac_tbl <- renderDT(
     if (input$ac_c_version == "comp") {
       #data.table version
       s_data_comp()[,
@@ -1405,36 +1408,40 @@ server <- function(input, output, session) {
   
   # Reactive Element for accessibility Graph.
   plot_data <- reactive({
-    ac_dt %>%
-      filter(origin == na.omit(c(input$ac_map_shape_click[[1]], "E00045442"))[1]) %>%
-      .[order(.$date), ]
+    
+    plot_data <- setDT(dbGetQuery(con, glue("SELECT date, origin, mean_min_time, type FROM {schema_name}.access_data WHERE origin='{input$ac_map_shape_click[[1]]}';")))
+    
+    
   })
+  
+  req(plot_data) 
   
   output$access_bokeh_plot <- renderRbokeh({
     figure(
-      data = plot_data(),
+      data = plot_data(),         
       legend_location = "right",
       xlab = "Date",
       ylab = "Minimum Journey Time (minutes)",
       title = input$ac_map_shape_click[[1]]
     ) %>%
       ly_lines(
-        x = as.Date(date),
+        x = date,
         y = mean_min_time,
         color = type,
         width = 2
       ) %>%
-      set_palette(discrete_color = pal_color(c(
+      set_palette(discrete_color = pal_color(c(           
         "#e41a1c", "#377eb8", "#4daf4a", "#984ea3",
         "#ff7f00", "#ffff33", "#a65628", "#f781bf", "#999999"
       ))) %>%
       ly_points(
-        x = as.Date(date),
+        x = date,
         y = mean_min_time,
         color = type,
         size = 4,
         hover = c(mean_min_time, type)
-      )
+      ) %>% 
+      x_axis(label=NULL)
   })
   
   ### Help tour for accessibility
@@ -1499,21 +1506,6 @@ server <- function(input, output, session) {
     }
   })
   
-  
-  # Import data for eligibility ---------------------------------------------
-  elig_data <- fread("data/eligibility/eligible_pop_estimates.csv", data.table = F) %>%
-    rename(geo_code = lsoa11cd)
-  
-  elig_forecast <- fread("data/eligibility/eligible_pop_forecasts.csv", data.table = F) %>%
-    rename(geo_code = area_code)
-  
-  lsoa <- readShapePoly("data/spatial_data/lsoa_4326.shp")
-  lsoa@data <- lsoa@data %>% transmute(geo_code = lsoa11cd)
-  
-  la <- readShapePoly("data/spatial_data/local_authorities_4326.shp")
-  la@data <- la@data["geo_code"]
-  
-  
   # Eligibility Map ---------------------------------------------------------
   
   # Create Leaflet eligibility Map
@@ -1546,57 +1538,75 @@ server <- function(input, output, session) {
   
   # Reactive data for Static eligibility Map.
   lsoa_data <- reactive({
-    elig_data[elig_data$year == input$elig_year[[1]], ]
+    elig_data <- setDT(dbGetQuery(con, glue("SELECT * FROM {schema_name}.el_pop_est ",
+                                            "WHERE year={input$elig_year[1]};")))
   })
   
   # Reactive data for Static Forecast eligibility map.
   lsoa_data_forecast <- reactive({
-    elig_forecast[elig_forecast$year == input$elig_forecast_year[[1]], ]
+    elig_data <- setDT(dbGetQuery(con, glue("SELECT * FROM {schema_name}.el_pop_for ",
+                                            "WHERE year={input$elig_year[1]};")))
   })
   
   
   # Reactive data for Comparative eligibility Map.
   lsoa_data_comp <- reactive({
-    elig_data[elig_data$year == input$elig_year_comp[[1]], ] %>%
-      inner_join(elig_data[elig_data$year == input$elig_year_comp[[2]], ], by = "geo_code") %>%
-      transmute(geo_code, value.y, value.x, value = round(100 * (value.y - value.x) / value.x, 1))
+    elig_data <- setDT(dbGetQuery(con, glue("SELECT j1.area_code_x AS area_code, j1.count_x AS count_x, j1.count_y AS count_y, ROUND(CAST((100*(j1.count_y-j1.count_x)/j1.count_x) AS numeric), 2) AS count ",
+                                            "FROM ((SELECT area_code AS area_code_x, count AS count_x FROM {schema_name}.el_pop_est ",
+                                            "WHERE year={input$elig_year_comp[1]}) y1 INNER JOIN (SELECT area_code AS area_code_y, count AS count_y ",
+                                            "FROM {schema_name}.el_pop_est WHERE year={input$elig_year_comp[2]}) y2 ON (y1.area_code_x=y2.area_code_y)) j1;")))
+    
   })
   
   # Reactive data for Comparative eligibility Map.
   lsoa_data_forecast_comp <- reactive({
-    elig_forecast[elig_forecast$year == input$elig_year_comp_forecast[[1]], ] %>%
-      inner_join(elig_forecast[elig_forecast$year == input$elig_year_comp_forecast[[2]], ], by = "geo_code") %>%
-      transmute(geo_code, value.y, value.x, perc_change = round((100 * (value.y - value.x) / value.x), 2))
+    elig_forecast <- setDT(dbGetQuery(con, glue("SELECT j1.area_code_x AS area_code, j1.count_x AS count_x, j1.count_y AS count_y, ROUND(CAST((100*(j1.count_y-j1.count_x)/j1.count_x) AS numeric), 2) AS count ",
+                                                "FROM ((SELECT area_code AS area_code_x, count AS count_x FROM {schema_name}.el_pop_for ",
+                                                "WHERE year={input$elig_year_comp_forecast[1]}) y1 INNER JOIN (SELECT area_code AS area_code_y, count AS count_y ",
+                                                "FROM {schema_name}.el_pop_for WHERE year={input$elig_year_comp_forecast[2]}) y2 ON (y1.area_code_x=y2.area_code_y)) j1;")))
+    
   })
   
   
-  output$elig_s_tbl <- renderDataTable(
+  output$elig_s_tbl <- renderDT(
     
     if (input$elig_source == "estimate") {
       if (input$elig_version == "comp") {
-        lsoa_data_comp() %>%
-          transmute(geo_code,
-                    t1_year = input$elig_year_comp[[1]], t2_year = input$elig_year_comp[[2]],
-                    t1_pop = value.x, t2_pop = value.y, perc_change = value
-          ) %>%
-          left_join(area_lookup %>% select(area_code, "Origin Name" = msoa11nm), by = c("geo_code" = "area_code"))
-      } else if (input$elig_version == "static") {
-        lsoa_data() %>%
-          transmute(geo_code, t1_year = input$elig_year_comp[[1]], t1_pop = value) %>%
-          left_join(area_lookup %>% select(area_code, "Origin Name" = msoa11nm), by = c("geo_code" = "area_code"))
+        
+        output_dt <- lsoa_data_comp()
+        
+        output_dt <- output_dt[,.(area_code, 
+                                  t1_year = input$elig_year_comp[[1]], 
+                                  t2_year = input$elig_year_comp[[2]],
+                                  t1_pop = count_x, 
+                                  t2_pop = count_y, 
+                                  perc_change = count)]
+        
+        output_dt
+        
+        } else if (input$elig_version == "static") {
+          
+          lsoa_data()[,.(area_code, 
+                         t1_year = input$elig_year_comp[[1]], 
+                         t1_pop = count)]
+          
       }
     } else if (input$elig_source == "forecast") {
       if (input$elig_version == "static") {
-        lsoa_data_forecast() %>%
-          transmute(geo_code, t1_year = input$elig_year_comp_forecast[[1]], t1_pop = value) %>%
-          left_join(area_lookup %>% select(area_code, "Origin Name" = msoa11nm), by = c("geo_code" = "area_code"))
+        
+        la_data_forecast()[,.(area_code, 
+                              t1_year = input$elig_year_comp_forecast[[1]], 
+                              t1_pop = count)]
+        
       } else if (input$elig_version == "comp") {
-        lsoa_data_forecast_comp() %>%
-          transmute(geo_code,
-                    t1_year = input$elig_year_comp_forecast[[1]],
-                    t2_year = input$elig_year_comp_forecast[[2]], t1_pop = value.x, t2_pop = value.y, perc_change
-          ) %>%
-          left_join(area_lookup %>% select(area_code, "Origin Name" = msoa11nm), by = c("geo_code" = "area_code"))
+        
+        la_data_forecast_comp()[,.(area_code,
+                                   t1_year = input$elig_year_comp_forecast[[1]],
+                                   t2_year = input$elig_year_comp_forecast[[2]], 
+                                   t1_pop = count_x, 
+                                   t2_pop = count_y, 
+                                   perc_change = count)]
+        
       }
     },
     options = list(pageLength = 10, scrollX = TRUE)
@@ -1612,29 +1622,37 @@ server <- function(input, output, session) {
       fwrite(
         if (input$elig_source == "estimate") {
           if (input$elig_version == "comp") {
-            lsoa_data_comp() %>%
-              transmute(geo_code,
-                        t1_year = input$elig_year_comp[[1]], t2_year = input$elig_year_comp[[2]],
-                        t1_pop = value.x, t2_pop = value.y, perc_change = value
-              ) %>%
-              left_join(area_lookup %>% select(area_code, "Origin Name" = msoa11nm), by = c("geo_code" = "area_code"))
+            
+            lsoa_data_comp()[,.(area_code,
+                                t1_year = input$elig_year_comp[[1]], 
+                                t2_year = input$elig_year_comp[[2]],
+                                t1_pop = count_x, 
+                                t2_pop = count_y, 
+                                perc_change = count)]
+            
           } else if (input$elig_version == "static") {
-            lsoa_data() %>%
-              transmute(geo_code, t1_year = input$elig_year_comp[[1]], t1_pop = value) %>%
-              left_join(area_lookup %>% select(area_code, "Origin Name" = msoa11nm), by = c("geo_code" = "area_code"))
+            
+            lsoa_data()[,.(area_code, 
+                           t1_year = input$elig_year_comp[[1]], 
+                           t1_pop = count)]
+            
           }
         } else if (input$elig_source == "forecast") {
           if (input$elig_version == "static") {
-            lsoa_data_forecast() %>%
-              transmute(geo_code, t1_year = input$elig_year_comp_forecast[[1]], t1_pop = value) %>%
-              left_join(area_lookup %>% select(area_code, "Origin Name" = msoa11nm), by = c("geo_code" = "area_code"))
+            
+            la_data_forecast()[,.(area_code, 
+                                  t1_year = input$elig_year_comp_forecast[[1]], 
+                                  t1_pop = count)]
+            
           } else if (input$elig_version == "comp") {
-            lsoa_data_forecast_comp() %>%
-              transmute(geo_code,
-                        t1_year = input$elig_year_comp_forecast[[1]],
-                        t2_year = input$elig_year_comp_forecast[[2]], t1_pop = value.x, t2_pop = value.y, perc_change
-              ) %>%
-              left_join(area_lookup %>% select(area_code, "Origin Name" = msoa11nm), by = c("geo_code" = "area_code"))
+            
+            la_data_forecast_comp()[,.(area_code,
+                                       t1_year = input$elig_year_comp_forecast[[1]],
+                                       t2_year = input$elig_year_comp_forecast[[2]], 
+                                       t1_pop = count_x, 
+                                       t2_pop = count_y, 
+                                       perc_change = count)]
+            
           }
         }
         , file
@@ -1645,60 +1663,70 @@ server <- function(input, output, session) {
   # Map update
   observeEvent(input$elig_update, {
     if (input$elig_source == "estimate") {
-      temp <- lsoa
+      
+      temp_shp <- st_read(dsn=con, layer=c(schema_name, "lsoa_boundaries"))
       
       if (input$elig_version == "static") {
         palette <- "Blues"
-        temp@data <- temp@data %>% left_join(lsoa_data(), by = "geo_code")
-        domain <- c(1, max(abs(temp@data$count)))
+        temp_shp <-  temp_shp %>% 
+          inner_join(lsoa_data(), by=c("area_code"))
+        domain <- c(1, max(abs(temp_shp$count)))
         suffix <- ""
-      } else if (input$elig_version == "comp") {
-        temp@data <- temp@data %>% left_join(lsoa_data_comp(), by = "geo_code")
+      } else if (input$elig_version == "comp"){
+        
+        temp_shp <- temp_shp %>%
+          inner_join(lsoa_data_comp(), by = c("area_code"))
         palette <- "RdYlGn"
-        domain <- c(-1 * max(abs(temp@data$count)), 0, max(abs(temp@data$count)))
+        domain <- c(-1 * max(abs(temp_shp$count)), 0, max(abs(temp_shp$count)))
         suffix <- " %"
       }
     } else if (input$elig_source == "forecast") {
-      temp <- la
+      
+      temp_shp <- st_read(dsn=con, layer=c(schema_name, "la_boundaries"))
+      
       if (input$elig_version == "static") {
         palette <- "Blues"
-        temp@data <- temp@data %>% left_join(lsoa_data_forecast(), by = "geo_code")
-        domain <- c(1, max(abs(temp@data$count)))
+        
+        temp_shp <- temp_shp %>% 
+          left_join(la_data_forecast(), by = c("area_code"))
+        domain <- c(1, max(abs(temp_shp$count)))
         suffix <- ""
       } else if (input$elig_version == "comp") {
-        temp@data <- temp@data %>% left_join(lsoa_data_forecast_comp() %>%
-                                               rename(count = perc_change), by = "geo_code")
+        
+        temp_shp <- temp_shp %>% 
+          left_join(la_data_forecast_comp(), by = c("area_code"))
+        
         palette <- "RdYlGn"
-        domain <- c(-1 * max(abs(temp@data$count)), 0, max(abs(temp@data$count)))
+        domain <- c(-1 * max(abs(temp_shp$count)), 0, max(abs(temp_shp$count)))
         suffix <- " %"
       }
     }
     
-    
-    leafletProxy("map_elig") %>%
+    leafletProxy("map_elig") %>% 
       clearShapes() %>%
       addPolygons(
-        data = temp[1:floor(nrow(temp@data) / 2), ],
+        data = temp_shp[1:floor(nrow(temp_shp)/ 2), ], 
         smoothFactor = 0,
         fillOpacity = 0.7,
-        label = ~htmlEscape(paste0(geo_code, " : ", count, suffix)),
-        highlightOptions = highlightOptions(color = "black", weight = 3, bringToFront = F),
-        layerId = ~geo_code,
+        label = ~htmlEscape(paste0(area_code, " : ", count, suffix)),
+        highlightOptions = highlightOptions(color = "black", weight = 2, bringToFront = T),
+        layerId = ~area_code,
         color = ~colorNumeric(palette, domain = domain)(count), weight = .5
       ) %>%
       addPolygons(
-        data = temp[(floor(nrow(temp@data) / 2) + 1):nrow(temp@data), ],
+        data = temp_shp[(floor(nrow(temp_shp) / 2) + 1):nrow(temp_shp), ],
         smoothFactor = 0,
         fillOpacity = 0.7,
-        layerId = ~geo_code,
-        label = ~htmlEscape(paste0(geo_code, " : ", count, suffix)),
-        highlightOptions = highlightOptions(color = "black", weight = 3, bringToFront = F),
+        layerId = ~area_code,
+        label = ~htmlEscape(paste0(area_code, " : ", count, suffix)),
+        highlightOptions = highlightOptions(color = "black", weight = 2, bringToFront = T), 
         color = ~colorNumeric(palette, domain = domain)(count), weight = .5
       )
   })
   
   # Update Eligibility Legend.
   observeEvent(input$elig_update, {
+    
     proxy <- leafletProxy("map_elig")
     
     if (input$elig_source == "estimate") {
@@ -1717,24 +1745,24 @@ server <- function(input, output, session) {
       if (input$elig_version == "static") {
         title <- "People"
         palette <- "Blues"
-        data <- lsoa_data_forecast()
+        data <- la_data_forecast()
         domain <- c(1, max(abs(data$count)))
       } else if (input$elig_version == "comp") {
         title <- "Change"
-        data <- lsoa_data_forecast_comp() %>% rename(count = perc_change)
+        data <- la_data_forecast_comp() %>% rename(count = perc_change)
         palette <- "RdYlGn"
         domain <- c(-1 * max(abs(data$count)), 0, max(abs(data$count)))
       }
     }
     
     pal <- colorNumeric(palette, domain)
-    proxy %>% clearControls()
-    proxy %>% addLegend(
-      position = "bottomright",
-      title = title,
-      pal = pal,
-      values = domain
-    )
+    proxy %>% clearControls() %>% 
+      leaflet::addLegend(
+        position = "bottomright",
+        title = title,
+        pal = pal,
+        values = domain
+      )
   })
   
   observeEvent(input$map_elig_shape_click[[1]], {
@@ -1747,13 +1775,15 @@ server <- function(input, output, session) {
   # eligibility Plot change graph
   plot_data2 <- reactive({
     if (input$elig_source == "estimate") {
-      elig_data %>%
-        filter(geo_code == na.omit(c(input$map_elig_shape_click[[1]], "E01008882"))[1]) %>%
-        .[order(.$year), ]
+      
+      elig_data <- dbGetQuery(con, glue("SELECT * FROM {schema_name}.d4_el0 
+                                      WHERE area_code='{input$map_elig_shape_click[[1]]}';"))
+      
     } else if (input$elig_source == "forecast") {
-      elig_forecast %>%
-        filter(geo_code == na.omit(c(input$map_elig_shape_click[[1]], "E08000025"))[1]) %>%
-        .[order(.$year), ]
+      
+      elig_forecast <- dbGetQuery(con, glue("SELECT * FROM {schema_name}.d4_el1 
+                                      WHERE area_code='{input$map_elig_shape_click[[1]]}';"))
+      
     }
   })
   
@@ -1809,6 +1839,10 @@ server <- function(input, output, session) {
   
 
 }
+
+onStop(function() {
+  dbDisconnect(con)
+})
 
 shinyApp(ui, server, enableBookmarking = "url")
 
