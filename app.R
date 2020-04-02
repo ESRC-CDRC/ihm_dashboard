@@ -788,7 +788,7 @@ server <- function(input, output, session) {
                                         "GROUP BY origin, destination) first1 INNER JOIN  ",
                                         "(SELECT CAST(SUM(flow) AS float) AS sum_nf_second, origin, destination ",
                                         "FROM {schema_name}.lsoa_flows ",
-                                        "WHERE AND (date BETWEEN '{as.Date(as.Date(input$od_c_real_date_start_2[[1]]))}' AND DATE '{as.Date(as.Date(input$od_c_real_date_start_2[[1]]))}' + INTERVAL '{as.numeric(input$od_c_real_period)-1} months') ",
+                                        "WHERE (date BETWEEN '{as.Date(as.Date(input$od_c_real_date_start_2[[1]]))}' AND DATE '{as.Date(as.Date(input$od_c_real_date_start_2[[1]]))}' + INTERVAL '{as.numeric(input$od_c_real_period)-1} months') ",
                                         "GROUP BY origin, destination) second1 ON (first1.origin_first=second1.origin AND first1.destination_first=second1.destination)) j1 ",
                                         "LEFT JOIN {schema_name}.all_points_wgs x1 ON (j1.origin=x1.area_code)) coord1 ",
                                         "LEFT JOIN {schema_name}.all_points_wgs y1 ON (coord1.destination=y1.area_code) ",
@@ -796,7 +796,7 @@ server <- function(input, output, session) {
     
     DT2_c <- na.omit(DT2_c, cols=c("origin", "destination", "orig_lon", "orig_lat", "dest_lon", "dest_lat"))
     
-    print("comp data load success!")
+    DT2_c
   })
   
   
@@ -804,8 +804,6 @@ server <- function(input, output, session) {
   
   observeEvent(input$od_c_real_s_update, {
     shinyjs::hide("od_map_real_toggle", anim = T, animType = "slide")
-    
-    print("test working!")
     
     
     if (input$od_c_real_version == "static") {
@@ -816,7 +814,8 @@ server <- function(input, output, session) {
         incProgress(1 / 4, message = "Importing data.")
         
         #request static data based on specified parameters
-        data <- data_od_s_real()[,head(.SD, round(input$od_c_real_nrows/100*nrow(data_od_s_real()))),]
+        data <- data_od_s_real()[, head(.SD, round(input$od_c_real_nrows/100*nrow(data_od_s_real()))), ]
+        
         
         # Update progress bar.
         incProgress(1 / 4, message = "Sampling for visualisation.")
@@ -827,6 +826,7 @@ server <- function(input, output, session) {
         
         # subset markers based on scale.
         mrks <- dbGetQuery(con, glue("SELECT st_x(geometry) AS longitude, st_y(geometry) AS latitude, area_code FROM {schema_name}.all_points_wgs WHERE scale='lsoa';"))
+
         
         # Update progress bar.
         incProgress(1 / 4, message = "Building Map.")
@@ -865,22 +865,17 @@ server <- function(input, output, session) {
         # Update progress bar.
         incProgress(1 / 4, message = "Done.") 
       })
-    }
-  })
-  
-  # Update map to reflect new criteria.
-  observeEvent(input$od_c_real_s_update, {
-    if(input$od_c_real_version=="comp"){
+    }else if(input$od_c_real_version=="comp"){
       shinyjs::hide("od_map_real_toggle", anim = T, animType = "slide")
-      
       
       # Create progress bar.
       withProgress(message = "Processing Request", value = 0, {
         
         # Update progress bar.
         incProgress(1 / 4, message = "Importing Map Data")
-        #10
-        data <- data_od_c_real()[, head(.SD, round(input$od_c_real_nrows/100*nrow(data_od_c_real()))) ,]
+        
+        #import data
+        data <- data_od_c_real()[, head(.SD, round(input$od_c_real_nrows/100*nrow(data_od_c_real()))), ]
         
         # Update progress bar.
         incProgress(1 / 4, message = "Sampling for visualisation.")
@@ -893,7 +888,6 @@ server <- function(input, output, session) {
         
         # Update progress bar.
         incProgress(1 / 4, message = "Building Map.")
-        
         
         map_com <- leafletProxy("map_com_real") %>%
           clearShapes() %>%
@@ -926,8 +920,7 @@ server <- function(input, output, session) {
                    popup = popupArgs(labels = "Change in Flow",
                                      supValues = data.frame("PercChange" = data$perc_change, "OrigFlow" = data$n1, "CompFlow" = data$n2),
                                      supLabels = c("Percentage Change", "Original Flow", "Comparison Flow"))
-          ) %>%
-          showGroup(input$od_c_real_scale)
+          )
       })
     }
   })
@@ -952,8 +945,6 @@ server <- function(input, output, session) {
       
       # subset markers based on scale.
       mrks <- dbGetQuery(con, glue("SELECT st_x(geometry) AS longitude, st_y(geometry) AS latitude, area_code FROM {schema_name}.all_points_wgs WHERE scale='lsoa';"))
-      
-      print("got marks")
       
       # Update od outbound map with new lines data.
       map_com <- leafletProxy("map_com_real") %>%
@@ -980,7 +971,6 @@ server <- function(input, output, session) {
           weight = 2
         )
       
-      print("made maps")
     }
   })
   
@@ -1055,18 +1045,15 @@ server <- function(input, output, session) {
   
   # eligibility Plot change graph
   plot_data3_real <- reactive({
-    data2a <- data_od_s_real()
-    data2a <- data2a[origin == input$map_com_real_marker_click[[1]], ,][,`:=`(dir = "outbound", colour = "#ff0000"),][order(-sum_nf)][,head(.SD,10),]
+    data2a <- data_od_s_real()[origin == input$map_com_real_marker_click[[1]], ,][,`:=`(dir = "outbound", colour = "#ff0000"),][order(-sum_nf)][,head(.SD,10),]
   })
   
   # eligibility Plot change graph
   plot_data4_real <- reactive({
-    data2b <- data_od_s_real()
-    data2b <- data2b[destination == input$map_com_real_marker_click[[1]], ,][,`:=`(dir = "inbound", colour = "#00ff00"),][order(-sum_nf)][,head(.SD,10),]
+    data2b <- data_od_s_real()[destination == input$map_com_real_marker_click[[1]], ,][,`:=`(dir = "inbound", colour = "#00ff00"),][order(-sum_nf)][,head(.SD,10),]
   })
   
   output$inbound_bokeh_plot_real <- renderRbokeh({
-    print("trying to do inbound bokeh plot")
     
     figure(
       data = plot_data4_real(),
@@ -1077,14 +1064,13 @@ server <- function(input, output, session) {
       ly_bar(
         x = as.character(origin),
         y = sum_nf,
-        fill_color = "#ff0000"
+        fill_color = colour
       ) %>%
       theme_axis("x", major_label_orientation = 45)
   })
   
   output$outbound_bokeh_plot_real <- renderRbokeh({
     
-    print("trying to do outbound bokeh plot")
     
     figure(
       data = plot_data3_real(),
@@ -1095,7 +1081,7 @@ server <- function(input, output, session) {
       ly_bar(
         x = as.character(destination),
         y = sum_nf,
-        fill_color = "#00ff00"
+        fill_color = colour
       ) %>%
       theme_axis("x", major_label_orientation = 45)
   })
