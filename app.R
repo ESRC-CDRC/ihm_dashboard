@@ -832,7 +832,7 @@ server <- function(input, output, session) {
         incProgress(1 / 4, message = "Building Map.")
         
         # Update static map with new lines data.
-        map <- leafletProxy("map_com_real", data = data) %>%
+        map <- leafletProxy("map_com_real") %>%
           clearShapes() %>%
           clearControls() %>%
           clearMarkers() %>%
@@ -895,7 +895,7 @@ server <- function(input, output, session) {
         incProgress(1 / 4, message = "Building Map.")
         
         
-        map_com <- leafletProxy("map_com_real", data = data) %>%
+        map_com <- leafletProxy("map_com_real") %>%
           clearShapes() %>%
           clearControls() %>%
           clearMarkers() %>%
@@ -941,16 +941,12 @@ server <- function(input, output, session) {
   observeEvent(input$map_com_real_marker_click, {
     shinyjs::show("od_map_real_toggle", anim = T, animType = "slide")
     
-    print(glue("input click on {input$map_com_real_marker_click[[1]]}"))
-    
+
     data2a <- data_od_s_real()[origin==input$map_com_real_marker_click[[1]], ,][,`:=`(dir="outbound", colour="#ff0000"),]
     
-    print("dat 1")
     data2b <- data_od_s_real()[destination==input$map_com_real_marker_click[[1]], ,][,`:=`(dir = "inbound", colour = "#00ff00"),]
     
     data2 <- rbind(data2a, data2b)
-    
-    print("successfully bound data")
     
     if (nrow(data2) > 0) {
       
@@ -960,15 +956,17 @@ server <- function(input, output, session) {
       print("got marks")
       
       # Update od outbound map with new lines data.
-      map <- leafletProxy("map_com_real", data = data2) %>%
+      map_com <- leafletProxy("map_com_real") %>%
         clearShapes() %>%
         clearMarkers() %>%
-        addFlows(lng0 = data$orig_lon,
-                 lat0 = data$orig_lat,
-                 lng1 = data$dest_lon,
-                 lat1 = data$dest_lat,
-                 flow = data$sum_nf, 
-                 color = data$colour,
+        clearControls() %>%
+        clearFlows() %>%
+        addFlows(lng0 = data2$orig_lon,
+                 lat0 = data2$orig_lat,
+                 lng1 = data2$dest_lon,
+                 lat1 = data2$dest_lat,
+                 flow = data2$sum_nf, 
+                 color = data2$colour,
                  dir = 1,
                  maxThickness = 5,
                  opacity = 1
@@ -978,8 +976,11 @@ server <- function(input, output, session) {
           lat = mrks$latitude,
           layerId = mrks$area_code,
           label = mrks$area_code,
-          radius = 2, weight = 2
+          radius = 2, 
+          weight = 2
         )
+      
+      print("made maps")
     }
   })
   
@@ -1065,6 +1066,8 @@ server <- function(input, output, session) {
   })
   
   output$inbound_bokeh_plot_real <- renderRbokeh({
+    print("trying to do inbound bokeh plot")
+    
     figure(
       data = plot_data4_real(),
       legend_location = "right",
@@ -1080,6 +1083,9 @@ server <- function(input, output, session) {
   })
   
   output$outbound_bokeh_plot_real <- renderRbokeh({
+    
+    print("trying to do outbound bokeh plot")
+    
     figure(
       data = plot_data3_real(),
       legend_location = "right",
@@ -1182,7 +1188,7 @@ server <- function(input, output, session) {
       #data.table version
       s_data_comp()[,
                     .(area_code, 
-                      type, 
+                      type = input$ac_type, 
                       T1_date = input$ac_date_comp[[1]], 
                       T2_date = input$ac_date_comp[[2]], 
                       T1_time = mean_min_time_start, 
@@ -1194,7 +1200,7 @@ server <- function(input, output, session) {
         #data.table version
         s_data()[,
                  .(area_code, 
-                   type, 
+                   type = input$ac_type, 
                    T1_date = as.Date(input$ac_date), 
                    T1_time = mean_min_time)]
         
@@ -1543,7 +1549,7 @@ server <- function(input, output, session) {
   })
   
   # Reactive data for Static Forecast eligibility map.
-  lsoa_data_forecast <- reactive({
+  la_data_forecast <- reactive({
     elig_data <- setDT(dbGetQuery(con, glue("SELECT * FROM {schema_name}.el_pop_for ",
                                             "WHERE year={input$elig_year[1]};")))
   })
@@ -1559,7 +1565,7 @@ server <- function(input, output, session) {
   })
   
   # Reactive data for Comparative eligibility Map.
-  lsoa_data_forecast_comp <- reactive({
+  la_data_forecast_comp <- reactive({
     elig_forecast <- setDT(dbGetQuery(con, glue("SELECT j1.area_code_x AS area_code, j1.count_x AS count_x, j1.count_y AS count_y, ROUND(CAST((100*(j1.count_y-j1.count_x)/j1.count_x) AS numeric), 2) AS count ",
                                                 "FROM ((SELECT area_code AS area_code_x, count AS count_x FROM {schema_name}.el_pop_for ",
                                                 "WHERE year={input$elig_year_comp_forecast[1]}) y1 INNER JOIN (SELECT area_code AS area_code_y, count AS count_y ",
@@ -1573,16 +1579,13 @@ server <- function(input, output, session) {
     if (input$elig_source == "estimate") {
       if (input$elig_version == "comp") {
         
-        output_dt <- lsoa_data_comp()
-        
-        output_dt <- output_dt[,.(area_code, 
+        lsoa_data_comp()[,.(area_code, 
                                   t1_year = input$elig_year_comp[[1]], 
                                   t2_year = input$elig_year_comp[[2]],
                                   t1_pop = count_x, 
                                   t2_pop = count_y, 
                                   perc_change = count)]
         
-        output_dt
         
         } else if (input$elig_version == "static") {
           
