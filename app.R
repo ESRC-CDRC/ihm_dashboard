@@ -1765,12 +1765,12 @@ server <- function(input, output, session) {
   plot_data2 <- reactive({
     if (input$elig_source == "estimate") {
       
-      elig_data <- dbGetQuery(con, glue("SELECT * FROM {schema_name}.d4_el0 
+      elig_data <- dbGetQuery(con, glue("SELECT * FROM {schema_name}.el_pop_est 
                                       WHERE area_code='{input$map_elig_shape_click[[1]]}';"))
       
     } else if (input$elig_source == "forecast") {
       
-      elig_forecast <- dbGetQuery(con, glue("SELECT * FROM {schema_name}.d4_el1 
+      elig_forecast <- dbGetQuery(con, glue("SELECT * FROM {schema_name}.el_pop_for 
                                       WHERE area_code='{input$map_elig_shape_click[[1]]}';"))
       
     }
