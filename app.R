@@ -66,7 +66,7 @@ pool <- dbPool(drv = dbDriver("PostgreSQL"),
 
 ui <- function(request) {
   dashboardPage(
-    dashboardHeader(title = "Secure Dashboard", tags$li(class = "dropdown", actionButton("full_reset", "Refresh App"))),
+    dashboardHeader(title = "Dashboard", tags$li(class = "dropdown", actionButton("full_reset", "Refresh App"))),
     ## Sidebar content
     dashboardSidebar(
       sidebarMenu(
@@ -122,7 +122,7 @@ ui <- function(request) {
                                  ),
                                  selectInput(
                                    inputId = "dygraph_time_resolution", label = "Resolution",
-                                   choices = list("Day" = "day", "Week" = "week", "Month" = "month", "Quarter" = "quarter")
+                                   choices = list("Month" = "month", "Quarter" = "quarter")
                                  ), 
                                  checkboxInput(
                                    inputId = "dygraph_table_show_1", label = "Show Datatable", F 
@@ -180,10 +180,11 @@ ui <- function(request) {
                               column(
                                 12,
                                 airDatepickerInput("od_c_real_date_start_1",
-                                                   label = "Start date",
-                                                   value = "2015-08-30",
-                                                   maxDate = "2016-08-18",
-                                                   minDate = "2015-08-11"
+                                                   label = "Start month",
+                                                   value = "2015-10-01",
+                                                   maxDate = "2016-08-01",
+                                                   minDate = "2015-08-01",
+                                                   view = "months"
                                 ),
                                 em(h5("These flows represent the trips on a certain provider. Data currently available for the period 2015-08-11 to 2016-08-18"))
                               ),
@@ -192,8 +193,8 @@ ui <- function(request) {
                                 #shinyjs::disabled(
                                 sliderInput(
                                   inputId = "od_c_real_period",
-                                  label = "Period in days",
-                                  min = 1, max = 90, post = " day(s)", value = 1
+                                  label = "Period in months",
+                                  min = 1, max = 24, post = " month(s)", value = 1
                                 )
                                 #)
                               )
@@ -203,7 +204,7 @@ ui <- function(request) {
                               solidHeader = T, style = "min-height: 270px;",
                               column(
                                 12,
-                                #shinyjs::disabled(
+                                shinyjs::disabled(
                                 pickerInput(
                                   inputId = "od_c_real_demographics",
                                   label = "Demographics",
@@ -228,7 +229,7 @@ ui <- function(request) {
                                   ),
                                   multiple = T
                                 )
-                                #)
+                                )
                               ),
                               br(),
                               column(
@@ -253,12 +254,12 @@ ui <- function(request) {
                               ),
                               column(
                                 12,
-                                #shinyjs::disabled(
+                                shinyjs::disabled(
                                 sliderInput("od_c_real_time_1",
                                             label = "Time of Day",
                                             min = 0, max = 24, post = ":00", value = c(0, 24)
                                 )
-                                #)
+                                )
                               )
                             ),
                             box(
@@ -285,10 +286,10 @@ ui <- function(request) {
                               column(
                                 12,
                                 airDatepickerInput("od_c_real_date_start_2",
-                                                   label = "Start date of 2nd period",
-                                                   value = "2015-09-13",
-                                                   maxDate = "2016-08-18",
-                                                   minDate = "2015-08-11"
+                                                   label = "Start month of 2nd period",
+                                                   value = "2015-09-01",
+                                                   maxDate = "2016-08-01",
+                                                   minDate = "2015-08-01"
                                 )
                               )
                             ),
@@ -303,13 +304,11 @@ ui <- function(request) {
                                   label = "Spatial scale ",
                                   width = "100%",
                                   choices = list(
-                                    "Bus Stop" = "stop",
-                                    "OA" = "oa",
                                     "LSOA" = "lsoa",
                                     "MSOA" = "msoa",
                                     "Local Authority" = "la"
                                   ),
-                                  selected = "Bus Stop",
+                                  selected = "LSOA",
                                   options = list(
                                     `actions-box` = T,
                                     size = 10
@@ -387,10 +386,11 @@ ui <- function(request) {
                                  column(
                                    12,
                                    airDatepickerInput("gen_att_date_start_1",
-                                                      label = "Start date",
-                                                      value = "2015-08-30",
-                                                      maxDate = "2016-08-18",
-                                                      minDate = "2015-08-11"
+                                                      label = "Start month",
+                                                      value = "2015-08-01",
+                                                      maxDate = "2016-08-01",
+                                                      minDate = "2015-08-01",
+                                                      view = "months"
                                    ),
                                    em(h5("These data represent the trips on a certain provider. Data currently available for the period 2015-08-11 to 2016-08-18"))
                                  ),
@@ -398,10 +398,10 @@ ui <- function(request) {
                                    12,
                                    sliderInput(
                                      inputId = "gen_att_period",
-                                     label = "Period in days",
+                                     label = "Period in months",
                                      min = 1, 
-                                     max = 90, 
-                                     post = " day(s)", 
+                                     max = 24, 
+                                     post = " month(s)", 
                                      value = 1
                                    )
                                    
@@ -412,7 +412,7 @@ ui <- function(request) {
                                  solidHeader = T, style = "min-height: 270px;",
                                  column(
                                    12,
-                                   #shinyjs::disabled(
+                                   shinyjs::disabled(
                                    pickerInput(
                                      inputId = "gen_att_demographics",
                                      label = "Demographics",
@@ -437,7 +437,7 @@ ui <- function(request) {
                                      ),
                                      multiple = T
                                    )
-                                   #)
+                                   )
                                  ),
                                  br(),
                                  column(
@@ -462,12 +462,12 @@ ui <- function(request) {
                                  ),
                                  column(
                                    12,
-                                   #shinyjs::disabled(
+                                   shinyjs::disabled(
                                    sliderInput("gen_att_time_1",
                                                label = "Time of Day",
                                                min = 0, max = 24, post = ":00", value = c(0, 24)
                                    )
-                                   #)
+                                   )
                                  )
                                ),
                                box(
@@ -534,12 +534,11 @@ ui <- function(request) {
                                      label = "Spatial scale ",
                                      width = "100%",
                                      choices = list(
-                                       "OA" = "oa",
                                        "LSOA" = "lsoa",
                                        "MSOA" = "msoa",
                                        "Local Authority" = "la"
                                      ),
-                                     selected = "OA",
+                                     selected = "LSOA",
                                      options = list(
                                        `actions-box` = T,
                                        size = 10
@@ -1117,20 +1116,15 @@ server <- function(input, output, session) {
     
     withProgress(message = "Processing Request", value = 0, {
       
-      #make inputs into strings for array in sql query
-      
-      age_string <- toString(sprintf("'%s'", input$od_c_real_demographics[grep("^[0-9]+$",input$od_c_real_demographics)]))
-      
-      gender_string <- toString(sprintf("'%s'", input$od_c_real_demographics[grep("^[A-Z]+$",input$od_c_real_demographics)]))
       
       incProgress(1 / 2, message = "Importing data.")
       
       #subset points and lookup table columns according to scale 
       
-      if(input$od_c_real_scale=="stop"){
+      if(input$od_c_real_scale=="lsoa"){
         input_scale_string <- input$od_c_real_scale
       }else{
-        input_scale_string <- paste0("stop, ",input$od_c_real_scale)
+        input_scale_string <- paste0("lsoa, ",input$od_c_real_scale)
       }
       
       #SQL query using inputs
@@ -1143,12 +1137,12 @@ server <- function(input, output, session) {
         "FROM (SELECT c.sum_nf, c.destination, c.origin_area_code, j.{input$od_c_real_scale} AS destination_area_code ",
         "FROM (SELECT a.sum_nf, a.origin, a.destination, i.{input$od_c_real_scale} AS origin_area_code ", 
         "FROM (SELECT SUM(nf) AS sum_nf, origin, destination ",
-        "FROM {schema_name}.flows_stop_n ",
-        "WHERE gender IN ({gender_string}) AND age IN ({age_string}) AND (hour BETWEEN {input$od_c_real_time_1[1]} AND {input$od_c_real_time_1[2]}) AND (date BETWEEN '{as.Date(input$od_c_real_date_start_1[[1]])}' AND DATE '{as.Date(input$od_c_real_date_start_1[[1]])}' + INTERVAL '{input$od_c_real_period-1} days') ",
+        "FROM {schema_name}.flows_lsoa_n ",
+        "WHERE (date BETWEEN '{as.Date(input$od_c_real_date_start_1[[1]])}' AND DATE '{as.Date(input$od_c_real_date_start_1[[1]])}' + INTERVAL '{input$od_c_real_period-1} months') ",
         "GROUP BY origin, destination) a ",
         "LEFT JOIN ",
-        "(SELECT {input_scale_string} FROM {schema_name}.stop_oa_lsoa_msoa_la) i ON (a.origin = i.stop)) c ",
-        "LEFT JOIN (SELECT {input_scale_string} FROM {schema_name}.stop_oa_lsoa_msoa_la) j ON (c.destination = j.stop)) d ",
+        "(SELECT {input_scale_string} FROM {schema_name}.stop_oa_lsoa_msoa_la GROUP BY {input_scale_string}) i ON (a.origin = i.lsoa)) c ",
+        "LEFT JOIN (SELECT {input_scale_string} FROM {schema_name}.stop_oa_lsoa_msoa_la GROUP BY {input_scale_string}) j ON (c.destination = j.lsoa)) d ",
         "GROUP BY d.destination_area_code, d.origin_area_code) e ",
         "LEFT JOIN (SELECT area_code, common_name, geometry FROM {schema_name}.all_points_wgs) x ON (e.origin_area_code=x.area_code)) f ",
         "LEFT JOIN (SELECT area_code, common_name, geometry FROM {schema_name}.all_points_wgs) y ON (f.destination_area_code=y.area_code) ",
@@ -1170,22 +1164,15 @@ server <- function(input, output, session) {
     withProgress(message = "Processing Request", value = 0, {
       
       
-      #make inputs into strings for array in sql query
-      
-      age_string <- toString(sprintf("'%s'", input$od_c_real_demographics[grep("^[0-9]+$",input$od_c_real_demographics)]))
-      
-      gender_string <- toString(sprintf("'%s'", input$od_c_real_demographics[grep("^[A-Z]+$",input$od_c_real_demographics)]))
-      
       incProgress(1 / 2, message = "Importing data.")
       
       #################
       
       #subset points and lookup table columns according to scale 
-      
-      if(input$od_c_real_scale=="stop"){
+      if(input$od_c_real_scale=="lsoa"){
         input_scale_string <- input$od_c_real_scale
       }else{
-        input_scale_string <- paste0("stop, ",input$od_c_real_scale)
+        input_scale_string <- paste0("lsoa, ",input$od_c_real_scale)
       }
       
       #put it all into the comparison query
@@ -1198,22 +1185,22 @@ server <- function(input, output, session) {
         "FROM (SELECT c.sum_nf_first, c.destination_first, c.origin_area_code_first, j.{input$od_c_real_scale} AS destination_area_code_first ",
         "FROM (SELECT a.sum_nf_first, a.origin_first, a.destination_first, i.{input$od_c_real_scale} AS origin_area_code_first ", 
         "FROM (SELECT SUM(nf) AS sum_nf_first, origin AS origin_first, destination AS destination_first ",
-        "FROM {schema_name}.flows_stop_n ",
-        "WHERE gender IN ({gender_string}) AND age IN ({age_string}) AND (hour BETWEEN {input$od_c_real_time_1[1]} AND {input$od_c_real_time_1[2]}) AND (date BETWEEN '{as.Date(input$od_c_real_date_start_1[[1]])}' AND DATE '{as.Date(input$od_c_real_date_start_1[[1]])}' + INTERVAL '{input$od_c_real_period-1} days') ",
+        "FROM {schema_name}.flows_lsoa_n ",
+        "WHERE (date BETWEEN '{as.Date(input$od_c_real_date_start_1[[1]])}' AND DATE '{as.Date(input$od_c_real_date_start_1[[1]])}' + INTERVAL '{input$od_c_real_period-1} months') ",
         "GROUP BY origin, destination) a ",
-        "LEFT JOIN (SELECT {input_scale_string} FROM {schema_name}.stop_oa_lsoa_msoa_la) i ON (a.origin_first = i.stop)) c ",
-        "LEFT JOIN (SELECT {input_scale_string} FROM {schema_name}.stop_oa_lsoa_msoa_la) j ON (c.destination_first = j.stop)) d ",
+        "LEFT JOIN (SELECT {input_scale_string} FROM {schema_name}.stop_oa_lsoa_msoa_la GROUP BY {input_scale_string}) i ON (a.origin_first = i.lsoa)) c ",
+        "LEFT JOIN (SELECT {input_scale_string} FROM {schema_name}.stop_oa_lsoa_msoa_la GROUP BY {input_scale_string}) j ON (c.destination_first = j.lsoa)) d ",
         "GROUP BY d.destination_area_code_first, d.origin_area_code_first) first1 ", 
         "INNER JOIN ",
         "(SELECT CAST(SUM(d2.sum_nf_second) AS float) AS sum_nf_second, d2.origin_area_code_second, d2.destination_area_code_second ",
         "FROM (SELECT c2.sum_nf_second, c2.destination_second, c2.origin_area_code_second, j2.{input$od_c_real_scale} AS destination_area_code_second ",
         "FROM (SELECT a2.sum_nf_second, a2.origin_second, a2.destination_second, i2.{input$od_c_real_scale} AS origin_area_code_second ", 
         "FROM (SELECT SUM(nf) AS sum_nf_second, origin AS origin_second, destination AS destination_second ",
-        "FROM {schema_name}.flows_stop_n ",
-        "WHERE gender IN ({gender_string}) AND age IN ({age_string}) AND (hour BETWEEN {input$od_c_real_time_1[1]} AND {input$od_c_real_time_1[2]}) AND (date BETWEEN '{as.Date(input$od_c_real_date_start_2[[1]])}' AND DATE '{as.Date(input$od_c_real_date_start_2[[1]])}' + INTERVAL '{input$od_c_real_period-1} days') ",
+        "FROM {schema_name}.flows_lsoa_n ",
+        "WHERE (date BETWEEN '{as.Date(input$od_c_real_date_start_2[[1]])}' AND DATE '{as.Date(input$od_c_real_date_start_2[[1]])}' + INTERVAL '{input$od_c_real_period-1} months') ",
         "GROUP BY origin, destination) a2 ",
-        "LEFT JOIN (SELECT {input_scale_string} FROM {schema_name}.stop_oa_lsoa_msoa_la) i2 ON (a2.origin_second = i2.stop)) c2 ",
-        "LEFT JOIN (SELECT {input_scale_string} FROM {schema_name}.stop_oa_lsoa_msoa_la) j2 ON (c2.destination_second = j2.stop)) d2 ",
+        "LEFT JOIN (SELECT {input_scale_string} FROM {schema_name}.stop_oa_lsoa_msoa_la GROUP BY {input_scale_string}) i2 ON (a2.origin_second = i2.stop)) c2 ",
+        "LEFT JOIN (SELECT {input_scale_string} FROM {schema_name}.stop_oa_lsoa_msoa_la GROUP BY {input_scale_string}) j2 ON (c2.destination_second = j2.stop)) d2 ",
         "GROUP BY d2.destination_area_code_second, d2.origin_area_code_second) second1 ON (first1.origin_area_code_first=second1.origin_area_code_second AND first1.destination_area_code_first=second1.destination_area_code_second)) j1 ", 
         "LEFT JOIN {schema_name}.all_points_wgs x1 ON (j1.origin_area_code_first=x1.area_code)) coord1 ",
         "LEFT JOIN {schema_name}.all_points_wgs y1 ON (coord1.destination=y1.area_code) ",
@@ -1667,10 +1654,18 @@ server <- function(input, output, session) {
       
       gender_string <- toString(sprintf("'%s'", input$gen_att_demographics[grep("^[A-Z]+$",input$gen_att_demographics)]))
       
+      #string for attraction or 
       if(input$gen_att_or_version=="gen"){
         gen_or_att <- "origin"
       }else if(input$gen_att_or_version=="att"){
         gen_or_att <- "destination"
+      }
+      
+      #scale string for aggregation
+      if(input$att_gen_scale=="lsoa"){
+        input_scale_string <- input$att_gen_scale
+      }else{
+        input_scale_string <- paste0("lsoa, ",input$att_gen_scale)
       }
       
       incProgress(1 / 2, message = "Importing data.")
@@ -1678,10 +1673,10 @@ server <- function(input, output, session) {
       #turned all the previous stuff into SQL query
       
       DT2_s <- setDT(dbGetQuery(pool, glue("SELECT SUM(j1.sum_nf) AS sum_nf, b.{input$att_gen_scale} AS area_code ",
-                                           "FROM (SELECT SUM(nf) AS sum_nf, {gen_or_att} FROM {schema_name}.flows_stop_n ",
-                                           "WHERE gender IN ({gender_string}) AND age IN ({age_string}) AND (hour BETWEEN {input$gen_att_time_1[1]} AND {input$gen_att_time_1[2]}) AND (date BETWEEN '{as.Date(input$gen_att_date_start_1[[1]])}' AND DATE '{as.Date(input$gen_att_date_start_1[[1]])}' + INTERVAL '{input$gen_att_period-1} days') ",
+                                           "FROM (SELECT SUM(nf) AS sum_nf, {gen_or_att} FROM {schema_name}.flows_lsoa_n ",
+                                           "WHERE (date BETWEEN '{as.Date(input$gen_att_date_start_1[[1]])}' AND DATE '{as.Date(input$gen_att_date_start_1[[1]])}' + INTERVAL '{input$gen_att_period-1} months') ",
                                            "GROUP BY {gen_or_att}) j1 ",
-                                           "LEFT JOIN {schema_name}.stop_oa_lsoa_msoa_la b ON (j1.{gen_or_att} = b.stop) ",
+                                           "LEFT JOIN (SELECT {input_scale_string} FROM {schema_name}.stop_oa_lsoa_msoa_la GROUP BY {input_scale_string}) b ON (j1.{gen_or_att} = b.lsoa) ",
                                            "GROUP BY b.{input$att_gen_scale};")))
       
       DT2_s <- na.omit(DT2_s)
@@ -1705,10 +1700,18 @@ server <- function(input, output, session) {
       
       gender_string <- toString(sprintf("'%s'", input$gen_att_demographics[grep("^[A-Z]+$",input$gen_att_demographics)]))
       
+      #generation or attraction
       if(input$gen_att_or_version=="gen"){
         gen_or_att <- "origin"
       }else if(input$gen_att_or_version=="att"){
         gen_or_att <- "destination"
+      }
+      
+      #scale string for aggregation
+      if(input$att_gen_scale=="lsoa"){
+        input_scale_string <- input$att_gen_scale
+      }else{
+        input_scale_string <- paste0("lsoa, ",input$att_gen_scale)
       }
       
       
@@ -1720,18 +1723,18 @@ server <- function(input, output, session) {
       DT2_c <- setDT(dbGetQuery(pool, glue("SELECT ROUND(((j3.sum_nf_second-j3.sum_nf_first)/j3.sum_nf_first)*100.0) AS perc_change, j3.sum_nf_second-j3.sum_nf_first AS n_change, j3.sum_nf_second AS n2, j3.sum_nf_first AS n1, j3.area_code_first AS area_code ",
                                            "FROM ((SELECT CAST(SUM(j1.sum_nf) AS float) AS sum_nf_first, b.{input$att_gen_scale} AS area_code_first ",
                                            "FROM (SELECT SUM(nf) AS sum_nf, {gen_or_att} ",
-                                           "FROM {schema_name}.flows_stop_n ",
-                                           "WHERE gender IN ({gender_string}) AND age IN ({age_string}) AND (hour BETWEEN {input$gen_att_time_1[1]} AND {input$gen_att_time_1[2]}) AND (date BETWEEN '{as.Date(input$gen_att_date_start_1[[1]])}' AND DATE '{as.Date(input$gen_att_date_start_1[[1]])}' + INTERVAL '{input$gen_att_period-1} days') ",
+                                           "FROM {schema_name}.flows_lsoa_n ",
+                                           "WHERE (date BETWEEN '{as.Date(input$gen_att_date_start_1[[1]])}' AND DATE '{as.Date(input$gen_att_date_start_1[[1]])}' + INTERVAL '{input$gen_att_period-1} months') ",
                                            "GROUP BY {gen_or_att}) j1 ",
-                                           "LEFT JOIN {schema_name}.stop_oa_lsoa_msoa_la b ON (j1.{gen_or_att} = b.stop) ",
+                                           "LEFT JOIN (SELECT {input_scale_string} FROM {schema_name}.stop_oa_lsoa_msoa_la GROUP BY {input_scale_string}) b ON (j1.{gen_or_att} = b.lsoa) ",
                                            "GROUP BY b.{input$att_gen_scale}) first1 ",
                                            "INNER JOIN ",
                                            "(SELECT CAST(SUM(j2.sum_nf) AS float) AS sum_nf_second, c.{input$att_gen_scale} AS area_code_second ",
                                            "FROM (SELECT SUM(nf) AS sum_nf, {gen_or_att} ",
-                                           "FROM {schema_name}.flows_stop_n ",
-                                           "WHERE gender IN ({gender_string}) AND age IN ({age_string}) AND (hour BETWEEN {input$gen_att_time_1[1]} AND {input$gen_att_time_1[2]}) AND (date BETWEEN '{as.Date(input$gen_att_date_start_2[[1]])}' AND DATE '{as.Date(input$gen_att_date_start_2[[1]])}' + INTERVAL '{input$gen_att_period-1} days') ",
+                                           "FROM {schema_name}.flows_lsoa_n ",
+                                           "WHERE (date BETWEEN '{as.Date(input$gen_att_date_start_2[[1]])}' AND DATE '{as.Date(input$gen_att_date_start_2[[1]])}' + INTERVAL '{input$gen_att_period-1} months') ",
                                            "GROUP BY {gen_or_att}) j2 ",
-                                           "LEFT JOIN {schema_name}.stop_oa_lsoa_msoa_la c ON (j2.{gen_or_att} = c.stop) ",
+                                           "LEFT JOIN (SELECT {input_scale_string} FROM {schema_name}.stop_oa_lsoa_msoa_la GROUP BY {input_scale_string}) c ON (j2.{gen_or_att} = c.lsoa) ",
                                            "GROUP BY c.{input$att_gen_scale}) second1 ON (first1.area_code_first=second1.area_code_second)) j3;")))
       
       DT2_c <- na.omit(DT2_c, cols = c("area_code"))
@@ -1944,6 +1947,12 @@ server <- function(input, output, session) {
       
       gender_string <- toString(sprintf("'%s'", input$gen_att_demographics[grep("^[A-Z]+$",input$gen_att_demographics)]))
       
+      #scale string for aggregation
+      if(input$att_gen_scale=="lsoa"){
+        input_scale_string <- input$att_gen_scale
+      }else{
+        input_scale_string <- paste0("lsoa, ",input$att_gen_scale)
+      }
       
       #db query
       #get flow data using the shape clicked code
@@ -1955,12 +1964,12 @@ server <- function(input, output, session) {
                                      "FROM (SELECT c.sum_nf, c.destination, c.origin_area_code, i.{input$att_gen_scale} AS destination_area_code ",
                                      "FROM (SELECT a.sum_nf, a.origin, a.destination, j.{input$att_gen_scale} AS origin_area_code ", 
                                      "FROM (SELECT SUM(nf) AS sum_nf, origin, destination ",
-                                     "FROM {schema_name}.flows_stop_n ",
-                                     "WHERE gender IN ({gender_string}) AND age IN ({age_string}) AND (hour BETWEEN {input$od_c_real_time_1[1]} AND {input$od_c_real_time_1[2]}) AND (date BETWEEN '{as.Date(input$od_c_real_date_start_1[[1]])}' AND DATE '{as.Date(input$od_c_real_date_start_1[[1]])}' + INTERVAL '{input$od_c_real_period-1} days') ",
+                                     "FROM {schema_name}.flows_lsoa_n ",
+                                     "WHERE (date BETWEEN '{as.Date(input$od_c_real_date_start_1[[1]])}' AND DATE '{as.Date(input$od_c_real_date_start_1[[1]])}' + INTERVAL '{input$od_c_real_period-1} months') ",
                                      "GROUP BY origin, destination) a ",
                                      "LEFT JOIN ",
-                                     "(SELECT stop, {input$att_gen_scale} FROM {schema_name}.stop_oa_lsoa_msoa_la) j  ON (a.origin = j.stop)) c ",
-                                     "LEFT JOIN (SELECT stop, {input$att_gen_scale} FROM {schema_name}.stop_oa_lsoa_msoa_la) i ON (c.destination = i.stop)) d ",
+                                     "(SELECT {input_scale_string} FROM {schema_name}.stop_oa_lsoa_msoa_la GROUP BY {input_scale_string}) j  ON (a.origin = j.lsoa)) c ",
+                                     "LEFT JOIN (SELECT {input_scale_string} FROM {schema_name}.stop_oa_lsoa_msoa_la  GROUP BY {input_scale_string}) i ON (c.destination = i.lsoa)) d ",
                                      "GROUP BY d.destination_area_code, d.origin_area_code) e ",
                                      "LEFT JOIN (SELECT area_code, common_name, geometry FROM {schema_name}.all_points_wgs) x ON (e.origin_area_code=x.area_code) ) f ",
                                      "LEFT JOIN (SELECT area_code, common_name, geometry FROM {schema_name}.all_points_wgs) y ON (f.destination_area_code=y.area_code)  ",
