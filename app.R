@@ -36,7 +36,7 @@ library(pool) # Tool to handle multiple connections to the same database
 library(glue) # To paste together complex text, mainly used in the SQL commands
 
 
-# options(shiny.trace = T)
+#options(shiny.trace = T)
 
 #######################################################################################################
 # Data ---------------------------------------------------------------------------------------
@@ -50,14 +50,14 @@ host_name=Sys.getenv("HOSTNAME")
 user_name=Sys.getenv("AGGDASHUSERNAME")
 password_name=Sys.getenv("AGGDASHPASSNAME")
 
-schema_name <- "public_dashboard"
+schema_name <- Sys.getenv("AGGDASHSCHEMANAME")
 
 #####################
 #Set up DB connection pool
 pool <- dbPool(drv = dbDriver("PostgreSQL"),
                dbname = db_name, 
                #comment out the host and it works
-               #host = host_name, 
+               host = host_name, 
                user = user_name, 
                password = password_name)
 
@@ -122,7 +122,7 @@ ui <- function(request) {
                                  ),
                                  selectInput(
                                    inputId = "dygraph_time_resolution", label = "Resolution",
-                                   choices = list("Month" = "month", "Quarter" = "quarter")
+                                   choices = list("Month" = "month", "Quarter" = "quarter", "Year" = "year")
                                  ), 
                                  checkboxInput(
                                    inputId = "dygraph_table_show_1", label = "Show Datatable", F 
@@ -184,7 +184,9 @@ ui <- function(request) {
                                                    value = "2015-10-01",
                                                    maxDate = "2016-08-01",
                                                    minDate = "2015-08-01",
-                                                   view = "months"
+                                                   view = "months", 
+                                                   minView = "months",
+                                                   dateFormat = "yyyy-mm"
                                 ),
                                 em(h5("These flows represent the trips on a certain provider. Data currently available for the period 2015-08-11 to 2016-08-18"))
                               ),
@@ -1199,8 +1201,8 @@ server <- function(input, output, session) {
         "FROM {schema_name}.flows_lsoa_n ",
         "WHERE (date BETWEEN '{as.Date(input$od_c_real_date_start_2[[1]])}' AND DATE '{as.Date(input$od_c_real_date_start_2[[1]])}' + INTERVAL '{input$od_c_real_period-1} months') ",
         "GROUP BY origin, destination) a2 ",
-        "LEFT JOIN (SELECT {input_scale_string} FROM {schema_name}.stop_oa_lsoa_msoa_la GROUP BY {input_scale_string}) i2 ON (a2.origin_second = i2.stop)) c2 ",
-        "LEFT JOIN (SELECT {input_scale_string} FROM {schema_name}.stop_oa_lsoa_msoa_la GROUP BY {input_scale_string}) j2 ON (c2.destination_second = j2.stop)) d2 ",
+        "LEFT JOIN (SELECT {input_scale_string} FROM {schema_name}.stop_oa_lsoa_msoa_la GROUP BY {input_scale_string}) i2 ON (a2.origin_second = i2.lsoa)) c2 ",
+        "LEFT JOIN (SELECT {input_scale_string} FROM {schema_name}.stop_oa_lsoa_msoa_la GROUP BY {input_scale_string}) j2 ON (c2.destination_second = j2.lsoa)) d2 ",
         "GROUP BY d2.destination_area_code_second, d2.origin_area_code_second) second1 ON (first1.origin_area_code_first=second1.origin_area_code_second AND first1.destination_area_code_first=second1.destination_area_code_second)) j1 ", 
         "LEFT JOIN {schema_name}.all_points_wgs x1 ON (j1.origin_area_code_first=x1.area_code)) coord1 ",
         "LEFT JOIN {schema_name}.all_points_wgs y1 ON (coord1.destination=y1.area_code) ",
