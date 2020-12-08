@@ -50,14 +50,16 @@ host_name=Sys.getenv("HOSTNAME")
 user_name=Sys.getenv("AGGDASHUSERNAME")
 password_name=Sys.getenv("AGGDASHPASSNAME")
 
+port_no=Sys.getenv("PORTNAME")
+
 schema_name <- Sys.getenv("AGGDASHSCHEMANAME")
 
 #####################
 #Set up DB connection pool
 pool <- dbPool(drv = dbDriver("PostgreSQL"),
                dbname = db_name, 
-               #comment out the host and it works
                host = host_name, 
+               port = port_no,
                user = user_name, 
                password = password_name)
 
