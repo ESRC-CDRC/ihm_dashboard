@@ -289,9 +289,12 @@ ui <- function(request) {
                                 12,
                                 airDatepickerInput("od_c_real_date_start_2",
                                                    label = "Start month of 2nd period",
-                                                   value = "2015-09-01",
+                                                   value = "2015-11-01",
                                                    maxDate = "2016-08-01",
-                                                   minDate = "2015-08-01"
+                                                   minDate = "2015-08-01",
+                                                   view = "months", 
+                                                   minView = "months",
+                                                   dateFormat = "yyyy-mm"
                                 )
                               )
                             ),
@@ -392,7 +395,9 @@ ui <- function(request) {
                                                       value = "2015-08-01",
                                                       maxDate = "2016-08-01",
                                                       minDate = "2015-08-01",
-                                                      view = "months"
+                                                      view = "months", 
+                                                      minView = "months",
+                                                      dateFormat = "yyyy-mm"
                                    ),
                                    em(h5("These data represent the trips on a certain provider. Data currently available for the period 2015-08-11 to 2016-08-18"))
                                  ),
@@ -518,10 +523,13 @@ ui <- function(request) {
                                  column(
                                    12,
                                    airDatepickerInput("gen_att_date_start_2",
-                                                      label = "Start date of 2nd period",
-                                                      value = "2015-09-13",
-                                                      maxDate = "2016-08-18",
-                                                      minDate = "2015-08-11"
+                                                      label = "Start month of 2nd period",
+                                                      value = "2015-09-01",
+                                                      maxDate = "2016-08-01",
+                                                      minDate = "2015-08-01",
+                                                      view = "months", 
+                                                      minView = "months",
+                                                      dateFormat = "yyyy-mm"
                                    )
                                  )
                                ),
