@@ -1023,7 +1023,7 @@ server <- function(input, output, session) {
         " by Gender (", str_to_title(input$dygraph_time_resolution), ")"
       ), group = "dygraphs"
     ) %>% 
-      dySeries("C", label = "Child") %>% dySeries("F", label = "Female") %>% dySeries("M", label = "Male") %>% dySeries("U", label = "Unknown"
+      dySeries("F", label = "Female") %>% dySeries("M", label = "Male") %>% dySeries("U", label = "Unknown"
       ) %>%
       dyLegend(labelsSeparateLines = T)%>%
       dyHighlight(
@@ -1032,7 +1032,7 @@ server <- function(input, output, session) {
         hideOnMouseOut = T
       ) %>%
       dyOptions(stackedGraph = stack_case, 
-                colors = RColorBrewer::brewer.pal(4, "Set1"), 
+                colors = RColorBrewer::brewer.pal(3, "Set1"), 
                 titleHeight = 25) %>% 
       dyRangeSelector(height = 30) %>%
       dyUnzoom() #
