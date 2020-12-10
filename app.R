@@ -1219,7 +1219,16 @@ server <- function(input, output, session) {
         "ORDER BY ABS(coord1.n_change) DESC;"
       )))
       
+      #debug for server
+      print(paste0("numer rows ",nrow(DT2_c)))
+      
+      print(paste0("colnames ",colnames()))
+      
       DT2_c <- na.omit(DT2_c, cols=c("origin", "destination", "orig_lon", "orig_lat", "dest_lon", "dest_lat"))
+      
+      print(paste0("after na.omit numer rows ",nrow(DT2_c)))
+      
+      print(paste0("after na.omit colnames ",colnames()))
       
       incProgress(2 / 2, message = "Outputting data table.")
       
