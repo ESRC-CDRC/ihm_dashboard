@@ -1245,7 +1245,7 @@ server <- function(input, output, session) {
         incProgress(1 / 4, message = "Importing data.")
         
         # request static data based on specified parameters
-        data <- data_od_s_real()[,head(.SD, round(input$od_c_real_nrows/100*nrow(data_od_s_real()))),]
+        data <- data_od_s_real()[,head(.SD, round(input$od_c_real_nrows/100*nrow(data_od_s_real()))),][order(sum_nf)]
         
         #validate(nrow(data)>0, "Please select a larger percentage of flows to display, current selection returns less than one.")
         
@@ -1452,13 +1452,16 @@ server <- function(input, output, session) {
   
   output$od_c_real_tbl <- renderDT(
     
+    
     if (input$od_c_real_version == "comp") {
       
       #make readable datatable
-      data_od_c_real()[, .(origin, 
-                           destination,
-                           T1_period = paste0(input$od_c_real_date_start_1, " +", input$od_c_real_period-1, 'd'),
-                           T2_period = paste0(as.Date(input$od_c_real_date_start_2), " +", input$od_c_real_period-1, 'd'),
+      data_od_c_real()[, .(origin_code=origin, 
+                           destination_code=destination,
+                           origin_common_name=orig_common_name,
+                           destination_common_name=dest_common_name,
+                           T1_period = paste0(format(input$od_c_real_date_start_1, "%Y-%m"), " +", input$od_c_real_period-1, 'm'),
+                           T2_period = paste0(format(input$od_c_real_date_start_2, "%Y-%m"), " +", input$od_c_real_period-1, 'm'),
                            T1 = n1, 
                            T2 = n2, 
                            n_change,
@@ -1468,10 +1471,12 @@ server <- function(input, output, session) {
     } else if (input$od_c_real_version == "static") {
       
       #make readable datatable
-      data_od_s_real()[, .(origin, 
-                           destination,
+      data_od_s_real()[, .(origin_code=origin, 
+                           destination_code=destination,
+                           origin_common_name=orig_common_name,
+                           destination_common_name=dest_common_name,
                            T1 = sum_nf,
-                           period = paste(input$od_c_real_date_start_1, " +", input$od_c_real_period-1, 'd'))]
+                           period = paste0(format(input$od_c_real_date_start_1, "%Y-%m"), " +", input$od_c_real_period-1, 'm'))]
     }
     ,
     options = list(pageLength = 10, scrollX = T)
@@ -1481,17 +1486,27 @@ server <- function(input, output, session) {
   # Comparative Map, data download handler
   output$od_c_real_downloader <- downloadHandler(
     filename = function() {
-      paste0(input$od_c_real_version, "_od.csv")
+      paste0(input$od_c_real_version,
+             "_od_",
+             "_",
+             input$od_c_real_period,
+             "_months_",
+             format(input$od_c_real_date_start_1, "%Y-%m"),
+             "_vs_",
+             format(input$od_c_real_date_start_2, "%Y-%m"), 
+             ".csv")
     },
     content = function(file) {
       fwrite(
         if (input$od_c_real_version == "comp") {
           
           #new data.table version
-          data_od_c_real()[,.(origin, 
-                              destination,
-                              T1_period = paste0(input$od_c_real_date_start_1, " +", input$od_c_real_period-1, 'd'),
-                              T2_period = paste0(as.Date(input$od_c_real_date_start_2), " +", input$od_c_real_period-1, 'd'),
+          data_od_c_real()[,.(origin_code=origin, 
+                              destination_code=destination,
+                              origin_common_name=orig_common_name,
+                              destination_common_name=dest_common_name,
+                              T1_period = paste0(format(input$od_c_real_date_start_1, "%Y-%m"), " +", input$od_c_real_period-1, 'm'),
+                              T2_period = paste0(format(input$od_c_real_date_start_2, "%Y-%m"), " +", input$od_c_real_period-1, 'm'),
                               T1 = n1, 
                               T2 = n2,
                               n_change,
@@ -1500,10 +1515,12 @@ server <- function(input, output, session) {
         } else if (input$od_c_real_version == "static") {
           
           #data table version
-          data_od_s_real()[,.(origin, 
-                              destination,
+          data_od_s_real()[,.(origin_code=origin, 
+                              destination_code=destination,
+                              origin_common_name=orig_common_name,
+                              destination_common_name=dest_common_name,
                               T1 = sum_nf,
-                              period = paste(input$od_c_real_date_start_1, " +", input$od_c_real_period-1, 'd'))]
+                              period = paste0(format(input$od_c_real_date_start_1, "%Y-%m"), " +", input$od_c_real_period-1, 'm'))]
           
         }, file
       )
@@ -2178,7 +2195,9 @@ server <- function(input, output, session) {
       
     } else if (input$gen_att_c_version == "static") {
       
-      gen_att_s()[,.(area_code, T1 = sum_nf, period = paste(as.Date(input$gen_att_date_start_1), " +", input$gen_att_period-1, 'd'))]
+      gen_att_s()[,.(area_code, 
+                     T1 = sum_nf, 
+                     period = paste(as.Date(input$gen_att_date_start_1), " +", input$gen_att_period-1, 'd'))]
       
     }
     ,
@@ -2941,7 +2960,7 @@ server <- function(input, output, session) {
         domain <- c(1, max(abs(data$count)))
       } else if (input$elig_version == "comp") {
         title <- "Change"
-        data <- la_data_forecast_comp() %>% rename(count = perc_change)
+        data <- la_data_forecast_comp()
         palette <- "RdYlGn"
         domain <- c(-1 * max(abs(data$count)), 0, max(abs(data$count)))
       }
