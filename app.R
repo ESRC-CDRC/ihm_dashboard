@@ -1150,7 +1150,8 @@ server <- function(input, output, session) {
         "FROM (SELECT a.sum_nf, a.origin, a.destination, i.{input$od_c_real_scale} AS origin_area_code ", 
         "FROM (SELECT SUM(nf) AS sum_nf, origin, destination ",
         "FROM {schema_name}.flows_lsoa_n ",
-        "WHERE (date BETWEEN '{as.Date(input$od_c_real_date_start_1[[1]])}' AND DATE '{as.Date(input$od_c_real_date_start_1[[1]])}' + INTERVAL '{input$od_c_real_period-1} months') ",
+        "WHERE date >= DATE '{as.Date(input$od_c_real_date_start_1[[1]])}' AND ",
+        "date <= DATE '{as.Date(input$od_c_real_date_start_1[[1]])}' + INTERVAL '{input$od_c_real_period-1} months' ",
         "GROUP BY origin, destination) a ",
         "LEFT JOIN ",
         "(SELECT {input_scale_string} FROM {schema_name}.stop_oa_lsoa_msoa_la GROUP BY {input_scale_string}) i ON (a.origin = i.lsoa)) c ",
@@ -1187,6 +1188,7 @@ server <- function(input, output, session) {
         input_scale_string <- paste0("lsoa, ",input$od_c_real_scale)
       }
       
+      
       #put it all into the comparison query
       
       DT2_c <- setDT(dbGetQuery(pool, glue(
@@ -1198,7 +1200,8 @@ server <- function(input, output, session) {
         "FROM (SELECT a.sum_nf_first, a.origin_first, a.destination_first, i.{input$od_c_real_scale} AS origin_area_code_first ", 
         "FROM (SELECT SUM(nf) AS sum_nf_first, origin AS origin_first, destination AS destination_first ",
         "FROM {schema_name}.flows_lsoa_n ",
-        "WHERE (date BETWEEN '{as.Date(input$od_c_real_date_start_1[[1]])}' AND DATE '{as.Date(input$od_c_real_date_start_1[[1]])}' + INTERVAL '{input$od_c_real_period-1} months') ",
+        "WHERE date >= DATE '{as.Date(input$od_c_real_date_start_1[[1]])}' AND ",
+        " date <= DATE '{as.Date(input$od_c_real_date_start_1[[1]])}' + INTERVAL '{input$od_c_real_period-1} months' ",
         "GROUP BY origin, destination) a ",
         "LEFT JOIN (SELECT {input_scale_string} FROM {schema_name}.stop_oa_lsoa_msoa_la GROUP BY {input_scale_string}) i ON (a.origin_first = i.lsoa)) c ",
         "LEFT JOIN (SELECT {input_scale_string} FROM {schema_name}.stop_oa_lsoa_msoa_la GROUP BY {input_scale_string}) j ON (c.destination_first = j.lsoa)) d ",
@@ -1209,7 +1212,8 @@ server <- function(input, output, session) {
         "FROM (SELECT a2.sum_nf_second, a2.origin_second, a2.destination_second, i2.{input$od_c_real_scale} AS origin_area_code_second ", 
         "FROM (SELECT SUM(nf) AS sum_nf_second, origin AS origin_second, destination AS destination_second ",
         "FROM {schema_name}.flows_lsoa_n ",
-        "WHERE (date BETWEEN '{as.Date(input$od_c_real_date_start_2[[1]])}' AND DATE '{as.Date(input$od_c_real_date_start_2[[1]])}' + INTERVAL '{input$od_c_real_period-1} months') ",
+        "WHERE date >= DATE '{as.Date(input$od_c_real_date_start_2[[1]])}' ",
+        "AND date <= DATE '{as.Date(input$od_c_real_date_start_2[[1]])}' + INTERVAL '{input$od_c_real_period-1} months'  ",
         "GROUP BY origin, destination) a2 ",
         "LEFT JOIN (SELECT {input_scale_string} FROM {schema_name}.stop_oa_lsoa_msoa_la GROUP BY {input_scale_string}) i2 ON (a2.origin_second = i2.lsoa)) c2 ",
         "LEFT JOIN (SELECT {input_scale_string} FROM {schema_name}.stop_oa_lsoa_msoa_la GROUP BY {input_scale_string}) j2 ON (c2.destination_second = j2.lsoa)) d2 ",
@@ -1220,15 +1224,7 @@ server <- function(input, output, session) {
       )))
       
       #debug for server
-      print(paste0("numer rows ", nrow(DT2_c)))
-      
-      print(paste0("colnames ", names(DT2_c)))
-      
       DT2_c <- na.omit(DT2_c, cols=c("origin", "destination", "orig_lon", "orig_lat", "dest_lon", "dest_lat"))
-      
-      print(paste0("after na.omit numer rows ",nrow(DT2_c)))
-      
-      print(paste0("after na.omit colnames ",names(DT2_c)))
       
       incProgress(2 / 2, message = "Outputting data table.")
       
@@ -1712,7 +1708,8 @@ server <- function(input, output, session) {
       
       DT2_s <- setDT(dbGetQuery(pool, glue("SELECT SUM(j1.sum_nf) AS sum_nf, b.{input$att_gen_scale} AS area_code ",
                                            "FROM (SELECT SUM(nf) AS sum_nf, {gen_or_att} FROM {schema_name}.flows_lsoa_n ",
-                                           "WHERE (date BETWEEN '{as.Date(input$gen_att_date_start_1[[1]])}' AND DATE '{as.Date(input$gen_att_date_start_1[[1]])}' + INTERVAL '{input$gen_att_period-1} months') ",
+                                           "WHERE date >= DATE '{as.Date(input$gen_att_date_start_1[[1]])}' ",
+                                           "AND date <= DATE '{as.Date(input$gen_att_date_start_1[[1]])}' + INTERVAL '{input$gen_att_period-1} months' ",
                                            "GROUP BY {gen_or_att}) j1 ",
                                            "LEFT JOIN (SELECT {input_scale_string} FROM {schema_name}.stop_oa_lsoa_msoa_la GROUP BY {input_scale_string}) b ON (j1.{gen_or_att} = b.lsoa) ",
                                            "GROUP BY b.{input$att_gen_scale};")))
@@ -1762,7 +1759,8 @@ server <- function(input, output, session) {
                                            "FROM ((SELECT CAST(SUM(j1.sum_nf) AS float) AS sum_nf_first, b.{input$att_gen_scale} AS area_code_first ",
                                            "FROM (SELECT SUM(nf) AS sum_nf, {gen_or_att} ",
                                            "FROM {schema_name}.flows_lsoa_n ",
-                                           "WHERE (date BETWEEN '{as.Date(input$gen_att_date_start_1[[1]])}' AND DATE '{as.Date(input$gen_att_date_start_1[[1]])}' + INTERVAL '{input$gen_att_period-1} months') ",
+                                           "WHERE date >= '{as.Date(input$gen_att_date_start_1[[1]])}' AND ",,
+                                           "date <= DATE '{as.Date(input$gen_att_date_start_1[[1]])}' + INTERVAL '{input$gen_att_period-1} months' ",
                                            "GROUP BY {gen_or_att}) j1 ",
                                            "LEFT JOIN (SELECT {input_scale_string} FROM {schema_name}.stop_oa_lsoa_msoa_la GROUP BY {input_scale_string}) b ON (j1.{gen_or_att} = b.lsoa) ",
                                            "GROUP BY b.{input$att_gen_scale}) first1 ",
@@ -1770,7 +1768,8 @@ server <- function(input, output, session) {
                                            "(SELECT CAST(SUM(j2.sum_nf) AS float) AS sum_nf_second, c.{input$att_gen_scale} AS area_code_second ",
                                            "FROM (SELECT SUM(nf) AS sum_nf, {gen_or_att} ",
                                            "FROM {schema_name}.flows_lsoa_n ",
-                                           "WHERE (date BETWEEN '{as.Date(input$gen_att_date_start_2[[1]])}' AND DATE '{as.Date(input$gen_att_date_start_2[[1]])}' + INTERVAL '{input$gen_att_period-1} months') ",
+                                           "WHERE date >= '{as.Date(input$gen_att_date_start_2[[1]])}' AND ",
+                                           "date <= DATE '{as.Date(input$gen_att_date_start_2[[1]])}' + INTERVAL '{input$gen_att_period-1} months' ",
                                            "GROUP BY {gen_or_att}) j2 ",
                                            "LEFT JOIN (SELECT {input_scale_string} FROM {schema_name}.stop_oa_lsoa_msoa_la GROUP BY {input_scale_string}) c ON (j2.{gen_or_att} = c.lsoa) ",
                                            "GROUP BY c.{input$att_gen_scale}) second1 ON (first1.area_code_first=second1.area_code_second)) j3;")))
@@ -2003,7 +2002,8 @@ server <- function(input, output, session) {
                                      "FROM (SELECT a.sum_nf, a.origin, a.destination, j.{input$att_gen_scale} AS origin_area_code ", 
                                      "FROM (SELECT SUM(nf) AS sum_nf, origin, destination ",
                                      "FROM {schema_name}.flows_lsoa_n ",
-                                     "WHERE (date BETWEEN '{as.Date(input$od_c_real_date_start_1[[1]])}' AND DATE '{as.Date(input$od_c_real_date_start_1[[1]])}' + INTERVAL '{input$od_c_real_period-1} months') ",
+                                     "WHERE date >= '{as.Date(input$od_c_real_date_start_1[[1]])}' AND ",
+                                     "date <= DATE '{as.Date(input$od_c_real_date_start_1[[1]])}' + INTERVAL '{input$od_c_real_period-1} months' ",
                                      "GROUP BY origin, destination) a ",
                                      "LEFT JOIN ",
                                      "(SELECT {input_scale_string} FROM {schema_name}.stop_oa_lsoa_msoa_la GROUP BY {input_scale_string}) j  ON (a.origin = j.lsoa)) c ",
