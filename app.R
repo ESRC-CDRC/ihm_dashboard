@@ -1162,7 +1162,7 @@ server <- function(input, output, session) {
       )))
       
       
-      DT2_s <- na.omit(DT2_s, cols=c("origin", "destination", "orig_lon", "orig_lat", "dest_lon", "dest_lat"))
+      DT2_s <- data.table::na.omit(DT2_s, cols=c("origin", "destination", "orig_lon", "orig_lat", "dest_lon", "dest_lat"))
       
       incProgress(2 / 2, message = "Outputting data table.")
       
@@ -1219,7 +1219,7 @@ server <- function(input, output, session) {
         "ORDER BY ABS(coord1.n_change) DESC;"
       )))
       
-      DT2_c <- na.omit(DT2_c, cols=c("origin", "destination", "orig_lon", "orig_lat", "dest_lon", "dest_lat"))
+      DT2_c <- data.table::na.omit(DT2_c, cols=c("origin", "destination", "orig_lon", "orig_lat", "dest_lon", "dest_lat"))
       
       incProgress(2 / 2, message = "Outputting data table.")
       
@@ -1708,7 +1708,7 @@ server <- function(input, output, session) {
                                            "LEFT JOIN (SELECT {input_scale_string} FROM {schema_name}.stop_oa_lsoa_msoa_la GROUP BY {input_scale_string}) b ON (j1.{gen_or_att} = b.lsoa) ",
                                            "GROUP BY b.{input$att_gen_scale};")))
       
-      DT2_s <- na.omit(DT2_s)
+      DT2_s <- data.table::na.omit(DT2_s)
       
       incProgress(2 / 2, message = "Outputting data table.")
       
@@ -1766,7 +1766,7 @@ server <- function(input, output, session) {
                                            "LEFT JOIN (SELECT {input_scale_string} FROM {schema_name}.stop_oa_lsoa_msoa_la GROUP BY {input_scale_string}) c ON (j2.{gen_or_att} = c.lsoa) ",
                                            "GROUP BY c.{input$att_gen_scale}) second1 ON (first1.area_code_first=second1.area_code_second)) j3;")))
       
-      DT2_c <- na.omit(DT2_c, cols = c("area_code"))
+      DT2_c <- data.table::na.omit(DT2_c, cols = c("area_code"))
       
       incProgress(2 / 2, message = "Outputting data table.")
       
@@ -2022,7 +2022,7 @@ server <- function(input, output, session) {
       }
       
       #get rid of NAs
-      flows_dt <- na.omit(flows_dt, cols=c("origin", "destination", "orig_lon", "dest_lon"))
+      flows_dt <- data.table::na.omit(flows_dt, cols=c("origin", "destination", "orig_lon", "dest_lon"))
       
       # Update progress bar.
       incProgress(1 / 4, message = "Building Map.")
@@ -2312,7 +2312,7 @@ server <- function(input, output, session) {
                                          "LEFT JOIN {schema_name}.ac_dt acc2 ON (j1.origin=acc2.origin) ",
                                          "WHERE date='{as.Date(input$ac_date_comp[[2]])}' AND type='{input$ac_type}';")))
     
-    ac_dt <- na.omit(ac_dt)
+    ac_dt <- data.table::na.omit(ac_dt)
     
   })
   
