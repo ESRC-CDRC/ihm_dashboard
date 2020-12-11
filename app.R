@@ -851,8 +851,8 @@ ui <- function(request) {
         tabItem(
           tabName = "tab_about",
           p("This dashboard was developed as part of the research project 'Inclusive and Healthy Mobility: Understanding Trends in Concessionary Travel in the West Midlands', conducted at University College London in partnership with Transport for West Midlands. Click here to find more information about the project."),
-          p("The dashboard was created using", tags$a(href = "https://shiny.rstudio.com/", "R Studio Shiny", target="_blank"), "by ", tags$a(href = "https://www.linkedin.com/in/alistairleak/", "Alistair Leak", target="_blank"), ", and updated by ", tags$a(href = "https://github.com/aclong", "Alfred Long", target="_blank"),"and", tags$a(href = "https://github.com/Timothy-Bruce", "Timothy Bruce", target="_blank")),
-          p("Research team: ", tags$a(href = "https://www.ucl.ac.uk/bartlett/casa/jens-kandt", "Jens Kandt", target="_blank"), " (PI), ", tags$a(href = "https://www.geog.ucl.ac.uk//people/academic-staff/paul-longley", "Paul Longley", target="_blank"), " (Co-I), Alistair Leak, ", tags$a(href = "https://www.ucl.ac.uk/geospatial-analytics/people/ffion-carney", "Ffion Carney", target="_blank"), " - University College London"),
+          p("The dashboard was created using", tags$a(href = "https://shiny.rstudio.com/", "R Studio Shiny", target="_blank"), " by ", tags$a(href = "https://www.linkedin.com/in/alistairleak/", "Alistair Leak", target="_blank"), ", and updated by ", tags$a(href = "https://github.com/aclong", "Alfie Long", target="_blank")," and ", tags$a(href = "https://github.com/Timothy-Bruce", "Timothy Bruce", target="_blank"), "."),
+          p("Research team: ", tags$a(href = "https://www.ucl.ac.uk/bartlett/casa/jens-kandt", "Jens Kandt", target="_blank"), " (PI), ", tags$a(href = "https://www.geog.ucl.ac.uk//people/academic-staff/paul-longley", "Paul Longley", target="_blank"), " (Co-I), Alistair Leak, ",tags$a(href = "https://github.com/aclong", "Alfie Long", target="_blank"), ", " , tags$a(href = "https://www.ucl.ac.uk/geospatial-analytics/people/ffion-carney", "Ffion Carney", target="_blank"), " - University College London"),
           p("Project partners: Chris Lane (Co-I), Daniel Pass, Phillip Evans, Anne Schweickert, Robert Walker  -  Transport for West Midlands"),
           h4("Data Sources"),
           tabBox(
@@ -864,7 +864,7 @@ ui <- function(request) {
             ),
             tabPanel(
               "Where and When",
-              p("Origin-destination flows of ENCTS passengers between stops from August 2015 to August 2016 aggregated from bus stop-level up to OAs, LSOAs, and MSOAs."),
+              p("Origin-destination flows of ENCTS passengers between LSOAs from August 2015 to August 2016 aggregated from LSOAs to MSOAs and Local Authorities."),
               p("The data record the frequency of journeys between stops, OAs, LSOAs, and MSOAs where it was possible to determine both journeys' origins and destinations. These counts do not represent all journeys and are limited to a specific service provider.")
             ),
             tabPanel(
