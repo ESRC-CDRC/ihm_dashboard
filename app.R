@@ -1033,7 +1033,8 @@ server <- function(input, output, session) {
       ) %>%
       dyOptions(stackedGraph = stack_case, 
                 colors = RColorBrewer::brewer.pal(3, "Set1"), 
-                titleHeight = 25) %>% 
+                titleHeight = 25,
+                maxNumberWidth = 20) %>% 
       dyRangeSelector(height = 30) %>%
       dyUnzoom() #
   })
@@ -1075,7 +1076,8 @@ server <- function(input, output, session) {
       ) %>%
       dyOptions(stackedGraph = stack_case, 
                 colors = c("#74a9cf", "#2b8cbe", "#045a8d", "#1f4369", "#183452"),
-                titleHeight = 25) %>%
+                titleHeight = 25,
+                maxNumberWidth = 20) %>%
       dyRangeSelector(height = 30) %>%
       dyUnzoom() 
   })
