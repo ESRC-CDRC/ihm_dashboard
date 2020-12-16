@@ -1252,7 +1252,7 @@ server <- function(input, output, session) {
         incProgress(1 / 4, message = "Importing data.")
         
         # request static data based on specified parameters
-        data <- data_od_s_real()[,head(.SD, round(input$od_c_real_nrows/100*nrow(data_od_s_real()))),][order(sum_nf)]
+        data <- data_od_s_real()[,head(.SD, round(input$od_c_real_nrows/100*nrow(data_od_s_real()))),][order(-sum_nf)]
         
         #validate(nrow(data)>0, "Please select a larger percentage of flows to display, current selection returns less than one.")
         
@@ -1269,6 +1269,12 @@ server <- function(input, output, session) {
           mrks <- dbGetQuery(pool, glue("SELECT st_x(geometry) AS longitude, st_y(geometry) AS latitude, area_code, COALESCE(common_name, area_code) AS common_name ",
                                         "FROM {schema_name}.all_points_wgs WHERE scale='{input$od_c_real_scale}';"))
           
+          # get polygons for display
+          poly_shapes <- st_read(dsn=pool, layer=c(schema_name, glue("{input$od_c_real_scale}_boundaries")))
+          
+          #rename if no common name
+          poly_shapes$common_name[is.na(poly_shapes$common_name)] <- poly_shapes$area_code[is.na(poly_shapes$common_name)]
+          
           # Update progress bar.
           incProgress(1 / 4, message = "Building Map.")
           
@@ -1278,15 +1284,15 @@ server <- function(input, output, session) {
             clearControls() %>%
             clearMarkers() %>%
             clearFlows() %>%
-            addCircleMarkers( 
-              lng = mrks$longitude,
-              lat = mrks$latitude,
-              layerId = mrks$area_code,
-              label = mrks$common_name, 
-              radius = 3, 
-              weight = 2, 
-              color='grey'  
-            ) %>%
+            addPolygons(data = poly_shapes,
+                        color = "grey",
+                        fillOpacity = 0.,
+                        smoothFactor = 0,
+                        weight = .5,
+                        label = ~htmlEscape(common_name),  
+                        layerId = ~area_code,
+                        highlightOptions = highlightOptions(color = "black", weight = 2)
+                        ) %>%
             addFlows(lng0 = data$orig_lon,
                      lat0 = data$orig_lat,
                      lng1 = data$dest_lon,
@@ -1338,7 +1344,7 @@ server <- function(input, output, session) {
         incProgress(1 / 4, message = "Importing Map Data")
         
         #get top percentage
-        data <- data_od_c_real()[, head(.SD, round(input$od_c_real_nrows/100*nrow(data_od_c_real()))) ,]
+        data <- data_od_c_real()[, head(.SD, round(input$od_c_real_nrows/100*nrow(data_od_c_real()))) ,][order(-sum_nf)]
         
         # Update progress bar.
         incProgress(1 / 4, message = "Sampling for visualisation.")
@@ -1350,6 +1356,12 @@ server <- function(input, output, session) {
         mrks <- dbGetQuery(pool, glue("SELECT st_x(geometry) AS longitude, st_y(geometry) AS latitude, area_code, COALESCE(common_name, area_code) AS common_name ",
                                       "FROM {schema_name}.all_points_wgs WHERE scale='{input$od_c_real_scale}';"))
         
+        # get polygons for display
+        poly_shapes <- st_read(dsn=pool, layer=c(schema_name, glue("{input$od_c_real_scale}_boundaries")))
+        
+        #rename if no common name
+        poly_shapes$common_name[is.na(poly_shapes$common_name)] <- poly_shapes$area_code[is.na(poly_shapes$common_name)]
+        
         # Update progress bar.
         incProgress(1 / 4, message = "Building Map.")
         
@@ -1359,14 +1371,14 @@ server <- function(input, output, session) {
           clearControls() %>%
           clearMarkers() %>%
           clearFlows() %>%
-          addCircleMarkers(   # 
-            lng = mrks$longitude,
-            lat = mrks$latitude,
-            layerId = mrks$area_code,
-            label = mrks$common_name,
-            radius = 3, 
-            weight = 2, 
-            color = "grey"
+          addPolygons(data = poly_shapes,
+                      color = "grey",
+                      fillOpacity = 0.,
+                      smoothFactor = 0,
+                      weight = .5,
+                      label = ~htmlEscape(common_name),  
+                      layerId = ~area_code,
+                      highlightOptions = highlightOptions(color = "black", weight = 2)
           ) %>%
           leaflet::addLegend("bottomright",
                              layerId = "od_map_legend",
@@ -1395,13 +1407,13 @@ server <- function(input, output, session) {
   
   
   #click on markers to show flows from and to given spot
-  observeEvent(input$map_com_real_marker_click, {
+  observeEvent(input$map_com_real_shape_click, {
     shinyjs::show("od_map_real_toggle", anim = T, animType = "slide")
     
     #plot flows
-    data2a <- data_od_s_real()[origin==input$map_com_real_marker_click[[1]], ,][,`:=`(dir="outbound", colour="#ff0000"),]
+    data2a <- data_od_s_real()[origin==input$map_com_real_shape_click[[1]], ,][,`:=`(dir="outbound", colour="#ff0000"),]
     
-    data2b <- data_od_s_real()[destination==input$map_com_real_marker_click[[1]], ,][,`:=`(dir = "inbound", colour = "#00ff00"),]
+    data2b <- data_od_s_real()[destination==input$map_com_real_shape_click[[1]], ,][,`:=`(dir = "inbound", colour = "#00ff00"),]
     
     data2 <- rbind(data2a, data2b)
     
@@ -1412,19 +1424,27 @@ server <- function(input, output, session) {
       mrks <- dbGetQuery(pool, glue("SELECT st_x(geometry) AS longitude, st_y(geometry) AS latitude, area_code, COALESCE(common_name, area_code) AS common_name ",
                                     "FROM {schema_name}.all_points_wgs WHERE scale='{input$od_c_real_scale}';"))
       
+      
+      # get polygons for display
+      poly_shapes <- st_read(dsn=pool, layer=c(schema_name, glue("{input$od_c_real_scale}_boundaries")))
+      
+      #rename if no common name
+      poly_shapes$common_name[is.na(poly_shapes$common_name)] <- poly_shapes$area_code[is.na(poly_shapes$common_name)]
+      
       # Update od outbound map with new lines data.
       map_com <- leafletProxy("map_com_real") %>%
         clearShapes() %>%
         clearMarkers() %>%
         clearControls() %>%
         clearFlows() %>%
-        addCircleMarkers(
-          lng = mrks$longitude,
-          lat = mrks$latitude,
-          layerId = mrks$area_code,
-          label = mrks$common_name,
-          radius = 3, 
-          weight = 2
+        addPolygons(data = poly_shapes,
+                    color = "grey",
+                    fillOpacity = 0.,
+                    smoothFactor = 0,
+                    weight = .5,
+                    label = ~htmlEscape(common_name),  
+                    layerId = ~area_code,
+                    highlightOptions = highlightOptions(color = "black", weight = 2)
         ) %>%
         addFlows(lng0 = data2$orig_lon,
                  lat0 = data2$orig_lat,
@@ -1534,7 +1554,7 @@ server <- function(input, output, session) {
     }
   )
   
-  observeEvent(input$map_com_real_marker_click, {
+  observeEvent(input$map_com_real_shape_click, {
     leafletProxy("map_com_real") %>% 
       clearControls()
   })
@@ -1546,7 +1566,7 @@ server <- function(input, output, session) {
   # Plot flow bars
   plot_data3_real <- reactive({
     
-    data2a <- data_od_s_real()[origin == input$map_com_real_marker_click[[1]], ,
+    data2a <- data_od_s_real()[origin == input$map_com_real_shape_click[[1]], ,
                                ][,`:=`(dir = "outbound", colour = "#ff0000"),
                                  ][order(-sum_nf)
                                    ][,head(.SD,10),
@@ -1556,7 +1576,7 @@ server <- function(input, output, session) {
   # Plot flow bars
   plot_data4_real <- reactive({
     
-    data2b <- data_od_s_real()[destination == input$map_com_real_marker_click[[1]], ,
+    data2b <- data_od_s_real()[destination == input$map_com_real_shape_click[[1]], ,
                                ][,`:=`(dir = "inbound", colour = "#00ff00"),
                                  ][order(-sum_nf)
                                    ][,head(.SD,10),
@@ -1574,7 +1594,7 @@ server <- function(input, output, session) {
       
       figure(
         data = plot_d4r,
-        title = paste0("To ",plot_d4r$dest_common_name[1],": ", input$map_com_real_marker_click[[1]]),
+        title = paste0("To ",plot_d4r$dest_common_name[1],": ", input$map_com_real_shape_click[[1]]),
         legend_location = "right",
         xlab = "",
         ylab = "Inbound Count",
@@ -1603,7 +1623,7 @@ server <- function(input, output, session) {
       
       figure(
         data = plot_d3r,
-        title = paste0("From ", plot_d3r$orig_common_name[1],": ",input$map_com_real_marker_click[[1]]),
+        title = paste0("From ", plot_d3r$orig_common_name[1],": ",input$map_com_real_shape_click[[1]]),
         legend_location = "right",
         xlab = "",
         ylab = "Outbound Count",
