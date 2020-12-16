@@ -1265,10 +1265,6 @@ server <- function(input, output, session) {
           # Create domain for legend
           domain <- c(min(data$sum_nf), max(data$sum_nf))
           
-          # subset markers based on scale.
-          mrks <- dbGetQuery(pool, glue("SELECT st_x(geometry) AS longitude, st_y(geometry) AS latitude, area_code, COALESCE(common_name, area_code) AS common_name ",
-                                        "FROM {schema_name}.all_points_wgs WHERE scale='{input$od_c_real_scale}';"))
-          
           # get polygons for display
           poly_shapes <- st_read(dsn=pool, layer=c(schema_name, glue("{input$od_c_real_scale}_boundaries")))
           
@@ -1352,10 +1348,6 @@ server <- function(input, output, session) {
         # Create the colour breaks
         binpal <- colorBin("RdYlBu", bins = c(-100, -80, -60, -40, -20, 0, 20, 40, 60, 80, Inf), reverse=TRUE)
         
-        # subset markers based on scale.
-        mrks <- dbGetQuery(pool, glue("SELECT st_x(geometry) AS longitude, st_y(geometry) AS latitude, area_code, COALESCE(common_name, area_code) AS common_name ",
-                                      "FROM {schema_name}.all_points_wgs WHERE scale='{input$od_c_real_scale}';"))
-        
         # get polygons for display
         poly_shapes <- st_read(dsn=pool, layer=c(schema_name, glue("{input$od_c_real_scale}_boundaries")))
         
@@ -1419,11 +1411,6 @@ server <- function(input, output, session) {
     
     
     if (nrow(data2) > 0) {
-      
-      # subset markers based on scale.
-      mrks <- dbGetQuery(pool, glue("SELECT st_x(geometry) AS longitude, st_y(geometry) AS latitude, area_code, COALESCE(common_name, area_code) AS common_name ",
-                                    "FROM {schema_name}.all_points_wgs WHERE scale='{input$od_c_real_scale}';"))
-      
       
       # get polygons for display
       poly_shapes <- st_read(dsn=pool, layer=c(schema_name, glue("{input$od_c_real_scale}_boundaries")))
