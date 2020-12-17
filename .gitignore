@@ -1,0 +1,9 @@
+*old_app.R
+*.Renviron
+*.Rhistory
+*.RData
+*.Ruserdata
+*.Rproj
+*rough_working*
+.Rproj.user
+packrat/lib*/
