@@ -76,7 +76,7 @@ pool <- dbPool(drv = dbDriver("PostgreSQL"),
 # UI definition ---------------------------------------------------------------------------------------
 
 ui <- function(request) {
-  dashboardPage(
+  dashboardPage(title = "UCL TfWM Dashboard",
     dashboardHeader(title = tagList(tags$span(class = "logo-mini", icon("dyalog")), tags$span(class="logo-lg", "Dashboard")), tags$li(class = "dropdown", actionButton("full_reset", "Refresh App"))),
     ## Sidebar content
     dashboardSidebar(
