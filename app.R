@@ -992,7 +992,8 @@ server <- function(input, output, session) {
         "FROM (SELECT a.sum_nf, a.origin, a.destination, i.{input$od_c_real_scale} AS origin_area_code ", 
         "FROM (SELECT SUM(nf) AS sum_nf, origin, destination ",
         "FROM {schema_name}.flows_lsoa_n ",
-        "WHERE (date BETWEEN '{as.Date(input$od_c_real_date_start_1[[1]])}' AND DATE '{as.Date(input$od_c_real_date_start_1[[1]])}' + INTERVAL '{input$od_c_real_period-1} months') ",
+        "WHERE date::date >= DATE '{as.Date(input$od_c_real_date_start_1[[1]])}' AND ",
+        "date::date <= DATE '{as.Date(input$od_c_real_date_start_1[[1]])}' + INTERVAL '{input$od_c_real_period-1} months' ",
         "GROUP BY origin, destination) a ",
         "LEFT JOIN ",
         "(SELECT {input_scale_string} FROM {schema_name}.stop_oa_lsoa_msoa_la GROUP BY {input_scale_string}) i ON (a.origin = i.lsoa)) c ",
@@ -2985,7 +2986,7 @@ server <- function(input, output, session) {
                                              "FROM ((SELECT year AS year_x, area_code AS area_code_x, count AS count_x ",
                                              "FROM {schema_name}.d4_el0 WHERE year='{format(as.Date(input$elig_year),'%Y')}') y1 ", 
                                              "INNER JOIN (SELECT year AS year_y, area_code AS area_code_y, count AS count_y ", 
-                                             "FROM {schema_name}.d4_el0 WHERE year={format(as.Date(input$elig_year_comp),'%Y')}) y2 ON (y1.area_code_x=y2.area_code_y)) j1 ",
+                                             "FROM {schema_name}.d4_el0 WHERE year='{format(as.Date(input$elig_year_comp),'%Y')}') y2 ON (y1.area_code_x=y2.area_code_y)) j1 ",
                                              "LEFT JOIN (SELECT area_code, common_name FROM {schema_name}.all_points_wgs) x ON (j1.area_code_x = x.area_code)) j2 ;")))
     
     
