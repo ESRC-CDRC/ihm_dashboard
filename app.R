@@ -2446,7 +2446,7 @@ server <- function(input, output, session) {
         " by Gender (", str_to_title(input$dygraph_time_resolution), ")"
       ), group = "dygraphs"
     ) %>% 
-      dySeries("C", label = "Child") %>% dySeries("F", label = "Female") %>% dySeries("M", label = "Male") %>% dySeries("U", label = "Unknown"
+       dySeries("F", label = "Female") %>% dySeries("M", label = "Male") %>% dySeries("U", label = "Unknown"
       ) %>%
       dyLegend(labelsSeparateLines = T)%>%
       dyHighlight(
