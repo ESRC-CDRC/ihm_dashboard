@@ -28,14 +28,14 @@ library(rintrojs) # Javascript based introduction to app
 library(sf) # for creating sf objects
 library(DT) # To render the data output tables
 library(shinyTime) # To intuitively input time into the App
+library(viridisLite) #tool to bind viridis to leaflet
+library(viridis) #tool use viridis palette 
 library(mapview) #To easily save displayed maps as .png or .pdf file
 
 library(RPostgreSQL) # r to  PostgreSQL specific interface wrapper
 library(DBI) # Basic SQL database connection package
 library(pool) # Tool to handle multiple connections to the same database
 library(glue) # To paste together complex text, mainly used in the SQL commands
-library(viridisLite) #tool to bind viridis to leaflet
-library(viridis) #tool use viridis palette 
 library(wesanderson) #tool to use wespalette
 
 ####HTML fix
